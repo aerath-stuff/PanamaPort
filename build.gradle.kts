@@ -7,7 +7,9 @@ subprojects {
     afterEvaluate {
         if (plugins.hasPlugin("com.android.library")) {
             configure<com.android.build.api.dsl.LibraryExtension> {
-                compileSdk = 36
+                compileSdk {
+                    version = release(36)
+                }
 
                 defaultConfig {
                     minSdk = 26
