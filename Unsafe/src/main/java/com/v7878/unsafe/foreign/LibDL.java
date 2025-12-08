@@ -25,7 +25,8 @@ import com.v7878.unsafe.ArtMethodUtils;
 import com.v7878.unsafe.foreign.BulkLinker.CallSignature;
 import com.v7878.unsafe.foreign.BulkLinker.SymbolGenerator;
 import com.v7878.unsafe.foreign.ELF.SymTab;
-import com.v7878.unsafe.foreign.MMap.MMapEntry;
+import com.v7878.unsafe.io.Maps;
+import com.v7878.unsafe.io.Maps.MMapEntry;
 
 import java.util.Objects;
 import java.util.Optional;
@@ -41,40 +42,13 @@ public class LibDL {
     public static final long RTLD_DEFAULT = IS64BIT ? 0L : -1L;
     public static final long RTLD_NEXT = IS64BIT ? -1L : -2L;
 
-    public static class DLInfo {
-        /**
-         * Pathname of shared object that contains address.
-         */
-        public final String fname;
-        /**
-         * Address at which shared object is loaded.
-         */
-        public final long fbase;
-        /**
-         * Name of nearest symbol with address lower than addr.
-         */
-        public final String sname;
-        /**
-         * Exact address of symbol named in sname.
-         */
-        public final long saddr;
-
-        DLInfo(String fname, long fbase, String sname, long saddr) {
-            this.fname = fname;
-            this.fbase = fbase;
-            this.sname = sname;
-            this.saddr = saddr;
-        }
-
-        @Override
-        public String toString() {
-            return "DLInfo{" +
-                    "fname=" + (fname == null ? null : '\'' + fname + '\'') +
-                    ", fbase=" + fbase +
-                    ", sname=" + (sname == null ? null : '\'' + sname + '\'') +
-                    ", saddr=" + saddr +
-                    '}';
-        }
+    /**
+     * @param fname Pathname of shared object that contains address
+     * @param fbase Address at which shared object is loaded
+     * @param sname Name of nearest symbol with address lower than addr
+     * @param saddr Exact address of symbol named in sname
+     */
+    public record DLInfo(String fname, long fbase, String sname, long saddr) {
     }
 
     private static final GroupLayout dlinfo_layout = paddedStructLayout(
@@ -100,7 +74,7 @@ public class LibDL {
 
         static {
             String linker_name = IS64BIT ? "linker64" : "linker";
-            MMapEntry linker = MMap.findFirstByPath("/\\S+/" + linker_name);
+            MMapEntry linker = Maps.findFirstByPath("/\\S+/" + linker_name);
             SymTab symbols = ELF.readSymTab(linker.path(), ART_INDEX >= A9);
 
             s_dladdr = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dladdrPKvP7Dl_info" : "__loader_dladdr", linker.start());

@@ -75,7 +75,7 @@ import java.util.stream.Stream;
  * factory methods, which return a memory segment backed by a newly allocated off-heap
  * region with the given size and aligned to the given alignment constraint.
  * Alternatively, native segments can be obtained by
- * {@link FileChannel#map(MapMode, long, long, Arena) mapping} a file into a new off-heap
+ * {@link FileChannelUtils#map(FileChannel, MapMode, long, long, Arena) mapping} a file into a new off-heap
  * region (in some systems, this operation is sometimes referred to as {@code mmap}).
  * Segments obtained in this way are called <em>mapped</em> segments, and their contents
  * can be {@linkplain #force() persisted} and {@linkplain #load() loaded} to and from the
@@ -909,7 +909,7 @@ public sealed interface MemorySegment permits _AbstractMemorySegmentImpl {
      * {@return {@code true} if this segment is a mapped segment}
      * <p>
      * A mapped memory segment is created e.g. using the
-     * {@link FileChannel#map(MapMode, long, long, Arena)} factory, or by
+     * {@link FileChannelUtils#map(FileChannel, MapMode, long, long, Arena)} factory, or by
      * {@linkplain #ofBuffer(Buffer) wrapping} a
      * {@linkplain java.nio.MappedByteBuffer mapped byte buffer}.
      */

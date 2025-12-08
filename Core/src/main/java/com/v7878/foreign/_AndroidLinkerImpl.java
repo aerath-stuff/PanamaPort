@@ -260,32 +260,26 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
         LLVMTypeRef retType;
         List<LLVMTypeRef> argTypes = new ArrayList<>(argStorages.length);
 
-        if (retStorage instanceof NoStorage) {
-            retType = void_t(context);
-        } else if (retStorage instanceof RawStorage rs) {
-            retType = layoutToLLVMType(context, rs.layout);
-        } else if (retStorage instanceof WrapperStorage ws) {
-            retType = layoutToLLVMType(context, ws.wrapper);
-        } else if (retStorage instanceof MemoryStorage ms) {
-            // pass as pointer argument with "sret" attribute
-            retType = void_t(context);
-            argTypes.add(ptr_t(layoutToLLVMType(context, ms.layout)));
-        } else {
-            throw shouldNotReachHere();
+        switch (retStorage) {
+            case NoStorage ignored -> retType = void_t(context);
+            case RawStorage rs -> retType = layoutToLLVMType(context, rs.layout);
+            case WrapperStorage ws -> retType = layoutToLLVMType(context, ws.wrapper);
+            case MemoryStorage ms -> {
+                // pass as pointer argument with "sret" attribute
+                retType = void_t(context);
+                argTypes.add(ptr_t(layoutToLLVMType(context, ms.layout)));
+            }
+            case null, default -> throw shouldNotReachHere();
         }
 
         for (LLVMStorage storage : argStorages) {
-            if (storage instanceof NoStorage) {
-                /* just drop */
-            } else if (storage instanceof RawStorage rs) {
-                argTypes.add(layoutToLLVMType(context, rs.layout));
-            } else if (storage instanceof WrapperStorage ws) {
-                argTypes.add(layoutToLLVMType(context, ws.wrapper));
-            } else if (storage instanceof MemoryStorage ms) {
+            switch (storage) {
+                case NoStorage ignored -> { /* just drop */ }
+                case RawStorage rs -> argTypes.add(layoutToLLVMType(context, rs.layout));
+                case WrapperStorage ws -> argTypes.add(layoutToLLVMType(context, ws.wrapper));
                 // pass as pointer with "byval" attribute
-                argTypes.add(ptr_t(layoutToLLVMType(context, ms.layout)));
-            } else {
-                throw shouldNotReachHere();
+                case MemoryStorage ms -> argTypes.add(ptr_t(layoutToLLVMType(context, ms.layout)));
+                case null, default -> throw shouldNotReachHere();
             }
         }
 
@@ -346,53 +340,55 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
             int retAlignment = 0;
             {
                 LLVMStorage retStorage = target_descriptor.returnStorage();
-                if (retStorage instanceof NoStorage) {
-                    if (options.isReturnInMemory()) {
-                        index++; // just drop
+                switch (retStorage) {
+                    case NoStorage ignored -> {
+                        if (options.isReturnInMemory()) {
+                            index++; // just drop
+                        }
                     }
-                } else if (retStorage instanceof RawStorage) {
-                    retVoid = false;
-                } else if (retStorage instanceof WrapperStorage ws) {
-                    // Note: store layout, not wrapper
-                    retAlignment = Math.toIntExact(ws.layout.byteAlignment());
-                    retStore = LLVMBuildIntToPtr(builder, stub_args[index],
-                            ptr_t(layoutToLLVMType(context, ws.wrapper)), "");
-                    index++;
-                } else if (retStorage instanceof MemoryStorage ms) {
-                    // pass as pointer argument with "sret" attribute
-                    attrs[count] = ms.add_attr ? sret_attr : null;
-                    aligns[count] = Math.toIntExact(ms.layout.byteAlignment());
-                    target_args[count] = LLVMBuildIntToPtr(builder, stub_args[index],
-                            ptr_t(layoutToLLVMType(context, ms.layout)), "");
-                    index++;
-                    count++;
-                } else {
-                    throw shouldNotReachHere();
+                    case RawStorage ignored -> retVoid = false;
+                    case WrapperStorage ws -> {
+                        // Note: store layout, not wrapper
+                        retAlignment = Math.toIntExact(ws.layout.byteAlignment());
+                        retStore = LLVMBuildIntToPtr(builder, stub_args[index],
+                                ptr_t(layoutToLLVMType(context, ws.wrapper)), "");
+                        index++;
+                    }
+                    case MemoryStorage ms -> {
+                        // pass as pointer argument with "sret" attribute
+                        attrs[count] = ms.add_attr ? sret_attr : null;
+                        aligns[count] = Math.toIntExact(ms.layout.byteAlignment());
+                        target_args[count] = LLVMBuildIntToPtr(builder, stub_args[index],
+                                ptr_t(layoutToLLVMType(context, ms.layout)), "");
+                        index++;
+                        count++;
+                    }
+                    case null, default -> throw shouldNotReachHere();
                 }
             }
             for (LLVMStorage storage : target_descriptor.argumentStorages()) {
-                if (storage instanceof NoStorage) {
-                    index++; // just drop
-                } else if (storage instanceof RawStorage) {
-                    target_args[count++] = stub_args[index++];
-                } else if (storage instanceof WrapperStorage ws) {
-                    stub_args[index] = LLVMBuildIntToPtr(builder, stub_args[index],
-                            ptr_t(layoutToLLVMType(context, ws.wrapper)), "");
-                    target_args[count] = LLVMBuildLoad(builder, stub_args[index], "");
-                    // Note: alignment from layout, not wrapper
-                    LLVMSetAlignment(target_args[count], Math.toIntExact(ws.layout.byteAlignment()));
-                    index++;
-                    count++;
-                } else if (storage instanceof MemoryStorage ms) {
-                    // pass as pointer with "byval" attribute
-                    attrs[count] = ms.add_attr ? byval_attr : null;
-                    aligns[count] = Math.toIntExact(ms.layout.byteAlignment());
-                    target_args[count] = LLVMBuildIntToPtr(builder, stub_args[index],
-                            ptr_t(layoutToLLVMType(context, ms.layout)), "");
-                    index++;
-                    count++;
-                } else {
-                    throw shouldNotReachHere();
+                switch (storage) {
+                    case NoStorage ignored -> index++; // just drop
+                    case RawStorage ignored -> target_args[count++] = stub_args[index++];
+                    case WrapperStorage ws -> {
+                        stub_args[index] = LLVMBuildIntToPtr(builder, stub_args[index],
+                                ptr_t(layoutToLLVMType(context, ws.wrapper)), "");
+                        target_args[count] = LLVMBuildLoad(builder, stub_args[index], "");
+                        // Note: alignment from layout, not wrapper
+                        LLVMSetAlignment(target_args[count], Math.toIntExact(ws.layout.byteAlignment()));
+                        index++;
+                        count++;
+                    }
+                    case MemoryStorage ms -> {
+                        // pass as pointer with "byval" attribute
+                        attrs[count] = ms.add_attr ? byval_attr : null;
+                        aligns[count] = Math.toIntExact(ms.layout.byteAlignment());
+                        target_args[count] = LLVMBuildIntToPtr(builder, stub_args[index],
+                                ptr_t(layoutToLLVMType(context, ms.layout)), "");
+                        index++;
+                        count++;
+                    }
+                    case null, default -> throw shouldNotReachHere();
                 }
             }
 
@@ -421,22 +417,16 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
     }
 
     private static String layoutName(MemoryLayout layout) {
-        if (layout == null) {
-            return "V";
-        }
-        if (layout instanceof AddressLayout al) {
-            return "A" + al.targetLayout().map(target ->
+        return switch (layout) {
+            case null -> "V";
+            case AddressLayout al -> "A" + al.targetLayout().map(target ->
                     "_size_" + target.byteSize() + "_align_" + target.byteAlignment()
             ).orElse("");
-        }
-        if (layout instanceof GroupLayout gl) {
-            return (gl instanceof StructLayout ? "S" : "U") +
+            case GroupLayout gl -> (gl instanceof StructLayout ? "S" : "U") +
                     "_size_" + gl.byteSize() + "_align_" + gl.byteAlignment();
-        }
-        if (layout instanceof ValueLayout vl) {
-            return Character.toString(TypeId.of(vl.carrier()).getShorty());
-        }
-        throw shouldNotReachHere();
+            case ValueLayout vl -> Character.toString(TypeId.of(vl.carrier()).getShorty());
+            default -> throw shouldNotReachHere();
+        };
     }
 
     private static String stubName(_FunctionDescriptorImpl descriptor,
@@ -825,31 +815,33 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                 .if_(has_arena, close_arena)
 
                                 .commit(ib2 -> {
-                                    if (ret == null) {
-                                        ib2.return_void();
-                                    } else if (ret instanceof AddressLayout al) {
-                                        if (IS64BIT) {
-                                            ib2.move_wide(ib2.l(0), ib2.l(native_ret_reg));
-                                        } else {
-                                            ib2.move(ib2.l(0), ib2.l(native_ret_reg));
-                                            ib2.unop(INT_TO_LONG, ib2.l(0), ib2.l(0));
-                                            ib2.const_wide(ib2.l(2), 0xffffffffL);
-                                            ib2.binop_2addr(AND_LONG, ib2.l(0), ib2.l(2));
-                                        }
-                                        MemoryLayout target = al.targetLayout().orElse(null);
-                                        long size = target == null ? 0 : target.byteSize();
-                                        long align = target == null ? 1 : target.byteAlignment();
+                                    switch (ret) {
+                                        case null -> ib2.return_void();
+                                        case AddressLayout al -> {
+                                            if (IS64BIT) {
+                                                ib2.move_wide(ib2.l(0), ib2.l(native_ret_reg));
+                                            } else {
+                                                ib2.move(ib2.l(0), ib2.l(native_ret_reg));
+                                                ib2.unop(INT_TO_LONG, ib2.l(0), ib2.l(0));
+                                                ib2.const_wide(ib2.l(2), 0xffffffffL);
+                                                ib2.binop_2addr(AND_LONG, ib2.l(0), ib2.l(2));
+                                            }
+                                            MemoryLayout target = al.targetLayout().orElse(null);
+                                            long size = target == null ? 0 : target.byteSize();
+                                            long align = target == null ? 1 : target.byteAlignment();
 
-                                        ib2.const_wide(ib2.l(2), size);
-                                        ib2.const_wide(ib2.l(4), align);
-                                        ib2.invoke_range(STATIC, make_segment_id, 6, ib2.l(0));
-                                        ib2.move_result_object(ib2.l(0));
-                                        ib2.return_object(ib2.l(0));
-                                    } else if (ret instanceof GroupLayout) {
-                                        ib2.move_object(ib2.l(0), ib2.p(allocator_arg[0]));
-                                        ib2.return_object(ib2.l(0));
-                                    } else {
-                                        ib2.return_shorty(native_ret_shorty, ib2.l(native_ret_reg));
+                                            ib2.const_wide(ib2.l(2), size);
+                                            ib2.const_wide(ib2.l(4), align);
+                                            ib2.invoke_range(STATIC, make_segment_id, 6, ib2.l(0));
+                                            ib2.move_result_object(ib2.l(0));
+                                            ib2.return_object(ib2.l(0));
+                                        }
+                                        case GroupLayout ignored -> {
+                                            ib2.move_object(ib2.l(0), ib2.p(allocator_arg[0]));
+                                            ib2.return_object(ib2.l(0));
+                                        }
+                                        default ->
+                                                ib2.return_shorty(native_ret_shorty, ib2.l(native_ret_reg));
                                     }
                                 })
                                 // TODO: Ljava/lang/Throwable;->addSuppressed(Ljava/lang/Throwable;)V
@@ -1031,30 +1023,34 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
             MemoryLayout retLoad = null;
             {
                 LLVMStorage retStorage = stub_descriptor.returnStorage();
-                if (retStorage instanceof NoStorage ns) {
-                    if (ns.layout != null) {
-                        var type = layoutToLLVMType(context, ns.layout);
-                        target_args[count++] = LLVMBuildAlloca(builder, type, "");
+                switch (retStorage) {
+                    case NoStorage ns -> {
+                        if (ns.layout != null) {
+                            var type = layoutToLLVMType(context, ns.layout);
+                            target_args[count++] = LLVMBuildAlloca(builder, type, "");
+                        }
                     }
-                } else if (retStorage instanceof RawStorage rs) {
-                    var type = layoutToLLVMType(context, retLoad = rs.layout);
-                    target_args[count++] = ret = LLVMBuildAlloca(builder, type, "");
-                } else if (retStorage instanceof WrapperStorage ws) {
-                    // Note: load layout, not wrapper
-                    var ltype = layoutToLLVMType(context, retLoad = ws.layout);
-                    var wtype = layoutToLLVMType(context, ws.wrapper);
-                    target_args[count++] = ret = LLVMBuildAlloca(builder, ltype, "");
-                    ret = LLVMBuildPointerCast(builder, ret, ptr_t(wtype), "");
-                } else if (retStorage instanceof MemoryStorage ms) {
-                    // pass as pointer argument with "sret" attribute
-                    var sret = stub_args[index++];
-                    // Note: attribute index = index of arg + 1 or 0 for return
-                    if (ms.add_attr) {
-                        LLVMAddAttributeAtIndex(stub, index, sret_attr);
+                    case RawStorage rs -> {
+                        var type = layoutToLLVMType(context, retLoad = rs.layout);
+                        target_args[count++] = ret = LLVMBuildAlloca(builder, type, "");
                     }
-                    target_args[count++] = LLVMBuildPtrToInt(builder, sret, intptr_t(context), "");
-                } else {
-                    throw shouldNotReachHere();
+                    case WrapperStorage ws -> {
+                        // Note: load layout, not wrapper
+                        var ltype = layoutToLLVMType(context, retLoad = ws.layout);
+                        var wtype = layoutToLLVMType(context, ws.wrapper);
+                        target_args[count++] = ret = LLVMBuildAlloca(builder, ltype, "");
+                        ret = LLVMBuildPointerCast(builder, ret, ptr_t(wtype), "");
+                    }
+                    case MemoryStorage ms -> {
+                        // pass as pointer argument with "sret" attribute
+                        var sret = stub_args[index++];
+                        // Note: attribute index = index of arg + 1 or 0 for return
+                        if (ms.add_attr) {
+                            LLVMAddAttributeAtIndex(stub, index, sret_attr);
+                        }
+                        target_args[count++] = LLVMBuildPtrToInt(builder, sret, intptr_t(context), "");
+                    }
+                    case null, default -> throw shouldNotReachHere();
                 }
             }
             for (LLVMStorage storage : stub_descriptor.argumentStorages()) {

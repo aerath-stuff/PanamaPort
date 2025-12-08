@@ -10,7 +10,6 @@ import static com.v7878.llvm.Core.LLVMBuildICmp;
 import static com.v7878.llvm.Core.LLVMBuildLoad;
 import static com.v7878.llvm.Core.LLVMBuildPhi;
 import static com.v7878.llvm.Core.LLVMBuildRet;
-import static com.v7878.llvm.Core.LLVMBuildRetVoid;
 import static com.v7878.llvm.Core.LLVMBuildUnreachable;
 import static com.v7878.llvm.Core.LLVMIntPredicate.LLVMIntEQ;
 import static com.v7878.llvm.Core.LLVMPositionBuilderAtEnd;
@@ -85,27 +84,9 @@ public class ENVGetter {
                     function_ptr_t(int32_t(context), intptr_t(context),
                             ptr_t(intptr_t(context)), intptr_t(context)));
 
-    private static final BiFunction<LLVMBuilderRef, LLVMValueRef, LLVMValueRef> DETACH =
-            pointerFactory(getJNIInvokeInterfaceOffset("DetachCurrentThread"), context ->
-                    function_ptr_t(int32_t(context), intptr_t(context)));
 
-    private static final MemorySegment DESTRUCTOR;
-
-    static {
-        final String name = "detach";
-        DESTRUCTOR = generateFunctionCodeSegment((context, module, builder) -> {
-            var f_type = function_t(void_t(context), intptr_t(context));
-            var function = LLVMAddFunction(module, name, f_type);
-
-            LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlock(function, ""));
-            var jvm_ptr = JVM.apply(context);
-            var jvm_iface = build_load_ptr(builder, intptr_t(context), jvm_ptr);
-            build_call(builder, DETACH.apply(builder, jvm_iface), jvm_ptr);
-            LLVMBuildRetVoid(builder);
-        }, name, SCOPE);
-    }
-
-    private static final int KEY = PThread.pthread_key_create(DESTRUCTOR.nativeAddress());
+    // Note: Destructor is not needed, since the thread itself will release the JVM resources upon completion
+    private static final int KEY = PThread.pthread_key_create(0);
 
     private static final MemorySegment GETTER;
 

@@ -24,6 +24,8 @@ import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.Objects;
 
+// TODO: read .gnu_debugdata section for additional symbols
+// TODO: make it public api
 // see elf.h
 class ELF {
     private static final int EI_NIDENT = 16;
@@ -293,7 +295,6 @@ class ELF {
     }
 
     private static Element[] readSymbols(ByteBuffer in, ByteBuffer symtab, ByteBuffer strtab) {
-
         symtab = getRawSegmentData(in, symtab);
         strtab = getRawSegmentData(in, strtab);
 
