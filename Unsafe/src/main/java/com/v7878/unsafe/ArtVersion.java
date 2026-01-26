@@ -28,7 +28,7 @@ public class ArtVersion {
 
     private static boolean is36p1() {
         try {
-            Class.forName("java.lang.invoke.VirtualThread");
+            Class.forName("java.util.stream.Gatherer");
             return true;
         } catch (ClassNotFoundException e) {
             return false;
