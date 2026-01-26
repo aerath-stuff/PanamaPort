@@ -1,4 +1,6 @@
 import com.vanniktech.maven.publish.AndroidMultiVariantLibrary
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SourcesJar
 
 plugins {
     alias(libs.plugins.android.library)
@@ -25,8 +27,8 @@ mavenPublishing {
     signAllPublications()
     configure(
         AndroidMultiVariantLibrary(
-            sourcesJar = true,
-            publishJavadocJar = false,
+            javadocJar = JavadocJar.Empty(),
+            sourcesJar = SourcesJar.Sources()
         )
     )
 
