@@ -24,6 +24,7 @@ import static com.v7878.unsafe.ArtVersion.A14;
 import static com.v7878.unsafe.ArtVersion.A15;
 import static com.v7878.unsafe.ArtVersion.A16;
 import static com.v7878.unsafe.ArtVersion.A16p1;
+import static com.v7878.unsafe.ArtVersion.A17;
 import static com.v7878.unsafe.ArtVersion.A8p0;
 import static com.v7878.unsafe.ArtVersion.A8p1;
 import static com.v7878.unsafe.ArtVersion.A9;
@@ -106,7 +107,7 @@ public class ArtMethodUtils {
 
     @ApiSensitive
     public static final GroupLayout ARTMETHOD_LAYOUT = switch (ART_INDEX) {
-        case A16p1, A16, A15, A14, A13, A12 -> art_method_16p1_12_layout;
+        case A17, A16p1, A16, A15, A14, A13, A12 -> art_method_16p1_12_layout;
         case A11, A10 -> art_method_11_10_layout;
         case A9 -> art_method_9_layout;
         case A8p1, A8p0 -> art_method_8xx_layout;

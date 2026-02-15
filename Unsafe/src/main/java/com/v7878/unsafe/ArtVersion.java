@@ -25,6 +25,16 @@ public class ArtVersion {
     public static final int A15 = 9;
     public static final int A16 = 10;
     public static final int A16p1 = 11;
+    public static final int A17 = 12;
+
+    private static boolean is37() {
+        try {
+            Class.forName("java.lang.foreign.MemoryLayout");
+            return true;
+        } catch (ClassNotFoundException e) {
+            return false;
+        }
+    }
 
     private static boolean is36p1() {
         try {
@@ -63,29 +73,30 @@ public class ArtVersion {
     }
 
     private static int computeIndex() {
-        int tmp = SDK_INT;
+        int tmp = SDK_INT_FULL;
 
-        if (tmp < 26) {
+        if (tmp < 2600000) {
             throw new UnsupportedOperationException("SDK versions below 26 are not supported");
         }
 
         // Android 12 introduces mainline project
-        if (tmp <= 30) return tmp - 26 + A8p0;
-        if (tmp > 36) {
-            tmp = 36;
-            Log.w(LOG_TAG, String.format("SDK version is too new: %s, maximum supported: %s", SDK_INT, 36));
+        if (tmp <= 3000000) return (tmp / 100000) - 26 + A8p0;
+        if (tmp > 3700000) {
+            tmp = 3700000;
+            Log.w(LOG_TAG, String.format(
+                    "SDK version is too new: %s, maximum supported: %s",
+                    SDK_INT, 3700000));
         }
 
-        // At the moment, there is nothing above 36.1
-        if (SDK_INT_FULL > 3600000 || is36p1()) return A16p1;
+        // At the moment, there is nothing above 37
+        if (tmp == 3700000 || is37()) return A17;
+        if (tmp > 3600000 || is36p1()) return A16p1;
+        if (tmp == 3600000 || is36()) return A16;
+        if (tmp == 3500000 || is35()) return A15;
+        if (tmp == 3400000 || is34()) return A14;
+        if (tmp == 3300000 || is33()) return A13;
 
-        if (tmp == 36 || is36()) return A16;
-        if (tmp == 35 || is35()) return A15;
-        if (tmp == 34 || is34()) return A14;
-        if (tmp == 33 || is33()) return A13;
-
-        //noinspection ConstantValue
-        assert tmp == 31 || tmp == 32;
+        assert tmp == 3100000 || tmp == 3200000;
         // Art module is the same for api 32 and 31
         return A12;
     }

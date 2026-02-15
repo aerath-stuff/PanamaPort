@@ -9,6 +9,7 @@ import static com.v7878.unsafe.AndroidUnsafe.putObject;
 import static com.v7878.unsafe.ArtModifiers.kAccCopied;
 import static com.v7878.unsafe.ArtVersion.A16;
 import static com.v7878.unsafe.ArtVersion.A16p1;
+import static com.v7878.unsafe.ArtVersion.A17;
 import static com.v7878.unsafe.ArtVersion.A8p0;
 import static com.v7878.unsafe.ArtVersion.ART_INDEX;
 import static com.v7878.unsafe.Utils.check;
@@ -40,10 +41,10 @@ import java.util.stream.Stream;
 
 public class Reflection {
     static {
-        check(ART_INDEX >= A8p0 && ART_INDEX <= A16p1, AssertionError::new);
+        check(ART_INDEX >= A8p0 && ART_INDEX <= A17, AssertionError::new);
     }
 
-    private static class Utils_16p1 {
+    private static class Utils_16p1_17 {
         @DoNotShrink
         @DoNotObfuscate
         @ApiSensitive
@@ -213,7 +214,7 @@ public class Reflection {
     @AlwaysInline
     private static long getMethodsPtr(Class<?> clazz) {
         return ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                Utils_16p1.getMethods(clazz) :
+                Utils_16p1_17.getMethods(clazz) :
                 Utils_16.getMethods(clazz)) :
                 Utils_8_15.getMethods(clazz);
     }
@@ -327,7 +328,7 @@ public class Reflection {
         long bf = getArtField(Test.bf);
         ART_FIELD_SIZE = Math.abs(bf - af);
         long fields = ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                Utils_16p1.getFields(Test.class) :
+                Utils_16p1_17.getFields(Test.class) :
                 Utils_16.getFields(Test.class)) :
                 Utils_8_15.getStaticFields(Test.class);
         ART_FIELD_PADDING = (af - fields - length_field_size)
@@ -434,7 +435,7 @@ public class Reflection {
 
     public static Field[] getHiddenInstanceFields(Class<?> clazz) {
         if (ART_INDEX >= A16) {
-            long fields = ART_INDEX >= A16p1 ? Utils_16p1.getFields(clazz) : Utils_16.getFields(clazz);
+            long fields = ART_INDEX >= A16p1 ? Utils_16p1_17.getFields(clazz) : Utils_16.getFields(clazz);
             if (fields == 0) {
                 return new Field[0];
             }
@@ -462,7 +463,7 @@ public class Reflection {
 
     public static Field[] getHiddenStaticFields(Class<?> clazz) {
         if (ART_INDEX >= A16) {
-            long fields = ART_INDEX >= A16p1 ? Utils_16p1.getFields(clazz) : Utils_16.getFields(clazz);
+            long fields = ART_INDEX >= A16p1 ? Utils_16p1_17.getFields(clazz) : Utils_16.getFields(clazz);
             if (fields == 0) {
                 return new Field[0];
             }
@@ -489,7 +490,7 @@ public class Reflection {
 
     public static Field[] getHiddenFields(Class<?> clazz) {
         if (ART_INDEX >= A16) {
-            long fields = ART_INDEX >= A16p1 ? Utils_16p1.getFields(clazz) : Utils_16.getFields(clazz);
+            long fields = ART_INDEX >= A16p1 ? Utils_16p1_17.getFields(clazz) : Utils_16.getFields(clazz);
             if (fields == 0) {
                 return new Field[0];
             }

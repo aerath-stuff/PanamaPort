@@ -14,6 +14,7 @@ import static com.v7878.unsafe.ArtVersion.A14;
 import static com.v7878.unsafe.ArtVersion.A15;
 import static com.v7878.unsafe.ArtVersion.A16;
 import static com.v7878.unsafe.ArtVersion.A16p1;
+import static com.v7878.unsafe.ArtVersion.A17;
 import static com.v7878.unsafe.ArtVersion.A8p0;
 import static com.v7878.unsafe.ArtVersion.A8p1;
 import static com.v7878.unsafe.ArtVersion.A9;
@@ -39,7 +40,7 @@ public class DexFileUtils {
             WORD.withName("size_")
     );
 
-    private static final GroupLayout dex_file_16p1_layout = paddedStructLayout(
+    private static final GroupLayout dex_file_17_16p1_layout = paddedStructLayout(
             ADDRESS.withName("__cpp_virtual_data__"),
             ADDRESS.withName("begin_"),
             WORD.withName("unused_size_"),
@@ -183,7 +184,7 @@ public class DexFileUtils {
 
     @ApiSensitive
     public static final GroupLayout DEXFILE_LAYOUT = switch (ART_INDEX) {
-        case A16p1 -> dex_file_16p1_layout;
+        case A17, A16p1 -> dex_file_17_16p1_layout;
         case A16, A15, A14 -> dex_file_14_16_layout;
         case A13, A12, A11 -> dex_file_13_11_layout;
         case A10 -> dex_file_10_layout;

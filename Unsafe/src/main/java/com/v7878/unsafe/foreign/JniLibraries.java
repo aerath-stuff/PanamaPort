@@ -14,6 +14,7 @@ import static com.v7878.unsafe.ArtVersion.A14;
 import static com.v7878.unsafe.ArtVersion.A15;
 import static com.v7878.unsafe.ArtVersion.A16;
 import static com.v7878.unsafe.ArtVersion.A16p1;
+import static com.v7878.unsafe.ArtVersion.A17;
 import static com.v7878.unsafe.ArtVersion.A8p0;
 import static com.v7878.unsafe.ArtVersion.A8p1;
 import static com.v7878.unsafe.ArtVersion.A9;
@@ -60,7 +61,7 @@ public class JniLibraries {
     @ApiSensitive
     private static final long libraries_offset = switch (ART_INDEX) {
         // TODO: Review after android 16 qpr 2 becomes stable
-        case A16p1, A16, A15, A14 -> {
+        case A17, A16p1, A16, A15, A14 -> {
             long tmp = ADDRESS_SIZE * 4L;
             tmp += 3;
             tmp = Math.roundUpUL(tmp, ADDRESS_SIZE);
