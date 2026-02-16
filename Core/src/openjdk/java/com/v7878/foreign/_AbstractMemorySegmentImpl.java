@@ -44,11 +44,9 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Spliterator;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntFunction;
@@ -65,7 +63,7 @@ import java.util.stream.StreamSupport;
  * {@link _MappedMemorySegmentImpl}.
  */
 abstract sealed class _AbstractMemorySegmentImpl
-        implements MemorySegment, SegmentAllocator, BiFunction<String, List<Number>, RuntimeException>
+        implements MemorySegment, SegmentAllocator
         permits _HeapMemorySegmentImpl, _NativeMemorySegmentImpl {
 
     final long length;
@@ -100,19 +98,19 @@ abstract sealed class _AbstractMemorySegmentImpl
 
     @Override
     public _AbstractMemorySegmentImpl asSlice(long offset, long newSize) {
-        checkBounds(offset, newSize);
+        checkSliceBounds(offset, newSize);
         return asSliceNoCheck(offset, newSize);
     }
 
     @Override
     public _AbstractMemorySegmentImpl asSlice(long offset) {
-        checkBounds(offset, 0);
+        checkSliceBounds(offset, 0);
         return asSliceNoCheck(offset, length - offset);
     }
 
     @Override
     public MemorySegment asSlice(long offset, long newSize, long byteAlignment) {
-        checkBounds(offset, newSize);
+        checkSliceBounds(offset, newSize);
         _Utils.checkAlign(byteAlignment);
 
         if (!isAlignedForElement(offset, byteAlignment)) {
@@ -339,7 +337,7 @@ abstract sealed class _AbstractMemorySegmentImpl
 
     public void checkAccess(long offset, long length, boolean readOnly) {
         checkReadOnly(readOnly);
-        checkBounds(offset, length);
+        checkAccessBounds(offset, length);
     }
 
     public final void checkEnclosingLayout(long offset, MemoryLayout enclosing, boolean readOnly) {
@@ -382,20 +380,33 @@ abstract sealed class _AbstractMemorySegmentImpl
         return (int) arraySize;
     }
 
-    void checkBounds(long offset, long length) {
-        if (length > 0) {
-            Objects.checkIndex(offset, this.length - length + 1);
-        } else if (length < 0 || offset < 0 ||
-                offset > this.length - length) {
-            throw outOfBoundException(offset, length);
+    @AlwaysInline
+    void checkSliceBounds(long offset, long length) {
+        if (!checkBounds(offset, length)) {
+            throwOutOfBounds(offset, length, /* isSlice = */ true);
         }
     }
 
-    @Override
-    public RuntimeException apply(String s, List<Number> numbers) {
-        long offset = numbers.get(0).longValue();
-        long length = byteSize() - numbers.get(1).longValue() + 1;
-        return outOfBoundException(offset, length);
+    @AlwaysInline
+    void checkAccessBounds(long offset, long length) {
+        if (!checkBounds(offset, length)) {
+            throwOutOfBounds(offset, length, /* isSlice = */ false);
+        }
+    }
+
+    @AlwaysInline
+    private boolean checkBounds(long offset, long length) {
+        return length >= 0 && offset >= 0 && offset <= this.length - length;
+    }
+
+    @SuppressLint("DefaultLocale")
+    private void throwOutOfBounds(long offset, long length, boolean isSlice) {
+        String action = isSlice ? "get slice" : "access an element";
+        String msg = String.format(
+                "Out of bound access on segment %s; attempting to %s of length %d at offset %d " +
+                        "which is outside the valid range 0 <= offset+length < byteSize (=%d)",
+                this, action, length, offset, this.length);
+        throw new IndexOutOfBoundsException(msg);
     }
 
     @Override
@@ -410,13 +421,6 @@ abstract sealed class _AbstractMemorySegmentImpl
 
     public final _MemorySessionImpl sessionImpl() {
         return scope;
-    }
-
-    @SuppressLint("DefaultLocale")
-    private IndexOutOfBoundsException outOfBoundException(long offset, long length) {
-        return new IndexOutOfBoundsException(
-                String.format("Out of bound access on segment %s; new offset = %d; new length = %d",
-                        this, offset, length));
     }
 
     static class SegmentSplitter implements Spliterator<MemorySegment> {

@@ -14,29 +14,28 @@ public class BulkMemoryOperations {
     private static final int NATIVE_THRESHOLD_FILL = 1 << 4;
     private static final int NATIVE_THRESHOLD_COPY = 1 << 4;
 
+    private static final long BYTE_REPLICATOR = 0x0101010101010101L;
+
     @DoNotShrink // TODO: DoNotInline
     private static void setMemoryJava(Object base, long offset, int bytes, byte value) {
-        final long u1 = value & 0xffL;
-        final long u2 = u1 | (u1 << 8);
-        final long u4 = u2 | (u2 << 16);
-        final long u8 = u4 | (u4 << 32);
+        final long u8 = BYTE_REPLICATOR * (value & 0xffL);
 
         int remaining = bytes;
 
         if (remaining >= Byte.BYTES && (offset & Byte.BYTES) != 0) {
-            AndroidUnsafe.putByte(base, offset, (byte) u1);
+            AndroidUnsafe.putByte(base, offset, (byte) u8);
             offset += Byte.BYTES;
             remaining -= Byte.BYTES;
         }
 
         if (remaining >= Short.BYTES && (offset & Short.BYTES) != 0) {
-            AndroidUnsafe.putShort(base, offset, (short) u2);
+            AndroidUnsafe.putShort(base, offset, (short) u8);
             offset += Short.BYTES;
             remaining -= Short.BYTES;
         }
 
         if (remaining >= Integer.BYTES && (offset & Integer.BYTES) != 0) {
-            AndroidUnsafe.putInt(base, offset, (int) u4);
+            AndroidUnsafe.putInt(base, offset, (int) u8);
             offset += Integer.BYTES;
             remaining -= Integer.BYTES;
         }
@@ -46,19 +45,19 @@ public class BulkMemoryOperations {
         }
 
         if (remaining >= Integer.BYTES) {
-            AndroidUnsafe.putInt(base, offset, (int) u4);
+            AndroidUnsafe.putInt(base, offset, (int) u8);
             offset += Integer.BYTES;
             remaining -= Integer.BYTES;
         }
 
         if (remaining >= Short.BYTES) {
-            AndroidUnsafe.putShort(base, offset, (short) u2);
+            AndroidUnsafe.putShort(base, offset, (short) u8);
             offset += Short.BYTES;
             remaining -= Short.BYTES;
         }
 
         if (remaining >= Byte.BYTES) {
-            AndroidUnsafe.putByte(base, offset, (byte) u1);
+            AndroidUnsafe.putByte(base, offset, (byte) u8);
         }
     }
 

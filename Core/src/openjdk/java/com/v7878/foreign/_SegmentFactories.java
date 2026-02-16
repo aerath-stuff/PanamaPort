@@ -209,7 +209,9 @@ final class _SegmentFactories {
             allocationBase = allocateMemoryWrapper(allocationSize);
             result = _Utils.alignUp(allocationBase, byteAlignment);
         } else {
-            allocationSize = byteSize;
+            // always allocate at least 'byteAlignment' bytes, so that malloc is guaranteed to
+            // return a pointer aligned to that alignment, for cases where byteAlignment > byteSize
+            allocationSize = Math.max(byteSize, byteAlignment);
 
             allocationBase = allocateMemoryWrapper(allocationSize);
             result = allocationBase;
