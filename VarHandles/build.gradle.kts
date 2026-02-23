@@ -34,7 +34,7 @@ mavenPublishing {
     )
 
     coordinates(
-        groupId = "io.github.vova7878.panama",
+        groupId = project.group.toString() + ".${rootProject.name}",
         artifactId = "VarHandles",
         version = project.version.toString()
     )
@@ -44,6 +44,7 @@ mavenPublishing {
         description.set("Implementation of FFM API for Android 8.0+")
         inceptionYear.set("2025")
         url.set("https://github.com/vova7878/PanamaPort")
+        packaging = "aar"
 
         licenses {
             license {
