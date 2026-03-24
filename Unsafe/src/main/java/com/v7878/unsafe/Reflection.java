@@ -309,7 +309,7 @@ public class Reflection {
     public static final long ART_FIELD_SIZE;
     public static final long ART_FIELD_PADDING;
 
-    private static final MethodHandle getArtField;
+    private static final Method getArtField;
 
     static {
         final int length_field_size = 4;
@@ -321,8 +321,7 @@ public class Reflection {
         ART_METHOD_PADDING = (am - methods - length_field_size)
                 % ART_METHOD_SIZE + length_field_size;
 
-        getArtField = unreflect(getHiddenVirtualMethod(
-                Field.class, "getArtField"));
+        getArtField = getHiddenMethod(Field.class, "getArtField");
 
         long af = getArtField(Test.af);
         long bf = getArtField(Test.bf);
@@ -369,8 +368,9 @@ public class Reflection {
     }
 
     @AlwaysInline
+    @SuppressWarnings("ConstantConditions")
     public static long getArtField(Field f) {
-        return nothrows_run(() -> (long) getArtField.invokeExact(f));
+        return nothrows_run(() -> (long) getArtField.invoke(f));
     }
 
     private static class Holder {
