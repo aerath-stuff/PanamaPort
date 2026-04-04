@@ -13,7 +13,6 @@ import static com.v7878.dex.builder.CodeBuilder.InvokeKind.DIRECT;
 import static com.v7878.dex.builder.CodeBuilder.InvokeKind.STATIC;
 import static com.v7878.dex.builder.CodeBuilder.UnOp.INT_TO_LONG;
 import static com.v7878.dex.builder.CodeBuilder.UnOp.LONG_TO_INT;
-import static com.v7878.foreign.ValueLayout.ADDRESS;
 import static com.v7878.llvm.Core.LLVMAddFunction;
 import static com.v7878.llvm.Core.LLVMAppendBasicBlock;
 import static com.v7878.llvm.Core.LLVMBuildRet;
@@ -39,21 +38,21 @@ import static com.v7878.unsafe.Utils.nothrows_run;
 import static com.v7878.unsafe.Utils.searchField;
 import static com.v7878.unsafe.Utils.searchMethod;
 import static com.v7878.unsafe.Utils.shouldNotReachHere;
-import static com.v7878.unsafe.llvm.LLVMBuilder.buildAddressToRawObject;
-import static com.v7878.unsafe.llvm.LLVMBuilder.buildRawObjectToAddress;
-import static com.v7878.unsafe.llvm.LLVMBuilder.build_call;
-import static com.v7878.unsafe.llvm.LLVMBuilder.build_const_load_ptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.call;
+import static com.v7878.unsafe.llvm.LLVMBuilder.const_fnptr;
 import static com.v7878.unsafe.llvm.LLVMBuilder.const_intptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.load_ptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.local_jobj_to_intptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.no_frame_pointer_elim;
 import static com.v7878.unsafe.llvm.LLVMTypes.double_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.float_t;
-import static com.v7878.unsafe.llvm.LLVMTypes.function_t;
+import static com.v7878.unsafe.llvm.LLVMTypes.fn_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int16_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int1_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int32_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int64_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int8_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.intptr_t;
-import static com.v7878.unsafe.llvm.LLVMTypes.ptr_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.void_t;
 import static com.v7878.unsafe.llvm.LLVMUtils.generateFunctionCodeArray;
 import static java.lang.annotation.ElementType.METHOD;
@@ -79,7 +78,6 @@ import com.v7878.r8.annotations.DoNotShrinkType;
 import com.v7878.unsafe.AndroidUnsafe;
 import com.v7878.unsafe.ApiSensitive;
 import com.v7878.unsafe.ClassUtils;
-import com.v7878.unsafe.DangerLevel;
 import com.v7878.unsafe.InstructionSet;
 import com.v7878.unsafe.NativeCodeBlob;
 import com.v7878.unsafe.Reflection;
@@ -100,7 +98,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Stream;
 
 import dalvik.system.DexFile;
 
@@ -120,14 +117,10 @@ public class BulkLinker {
         OBJECT(false, Object.class),
 
         // extra types
+        LOAD_JOBJECT(true, Object.class), // Do not use with regular jni
+        LOAD_WORD_PTR(true, IS64BIT ? long.class : int.class, long.class),
         LONG_AS_WORD(false, IS64BIT ? long.class : int.class, long.class),
-        BOOL_AS_INT(false, int.class, boolean.class),
-
-        @DangerLevel(DangerLevel.VERY_CAREFUL)
-        OBJECT_AS_RAW_INT(false, int.class, Object.class),
-        @DangerLevel(DangerLevel.VERY_CAREFUL)
-        OBJECT_AS_ADDRESS(true, int.class, Object.class);
-        //TODO: OBJECT_AS_ADDRESS_WITH_OFFSET(true, int.class, Object.class);
+        BOOL_AS_INT(false, int.class, boolean.class);
 
         final boolean requireNativeStub;
         final Class<?> forStub;
@@ -167,17 +160,16 @@ public class BulkLinker {
     }
 
     public enum CallType {
-        NATIVE_STATIC(false, false, EnvType.FULL_ENV, false, true, ACC_NATIVE | ACC_STATIC),
-        NATIVE_STATIC_OMIT_ENV(false, true, EnvType.OMIT_ENV, false, true, ACC_NATIVE | ACC_STATIC),
-        NATIVE_VIRTUAL(false, false, EnvType.FULL_ENV, false, false, ACC_NATIVE),
-        NATIVE_VIRTUAL_REPLACE_THIS(false, false, EnvType.FULL_ENV, true, false, ACC_NATIVE),
-        FAST_STATIC(true, false, EnvType.FULL_ENV, false, true, ACC_NATIVE | ACC_STATIC, Annotation.FastNative()),
-        FAST_STATIC_OMIT_ENV(true, true, EnvType.OMIT_ENV, false, true, ACC_NATIVE | ACC_STATIC, Annotation.FastNative()),
-        FAST_VIRTUAL(true, false, EnvType.FULL_ENV, false, false, ACC_NATIVE, Annotation.FastNative()),
-        FAST_VIRTUAL_REPLACE_THIS(true, false, EnvType.FULL_ENV, true, false, ACC_NATIVE, Annotation.FastNative()),
-        CRITICAL(true, false, EnvType.NO_ENV, false, true, ACC_NATIVE | ACC_STATIC, Annotation.CriticalNative());
+        NATIVE_STATIC(false, EnvType.FULL_ENV, false, true, ACC_NATIVE | ACC_STATIC),
+        NATIVE_STATIC_OMIT_ENV(true, EnvType.OMIT_ENV, false, true, ACC_NATIVE | ACC_STATIC),
+        NATIVE_VIRTUAL(false, EnvType.FULL_ENV, false, false, ACC_NATIVE),
+        NATIVE_VIRTUAL_REPLACE_THIS(false, EnvType.FULL_ENV, true, false, ACC_NATIVE),
+        FAST_STATIC(false, EnvType.FULL_ENV, false, true, ACC_NATIVE | ACC_STATIC, Annotation.FastNative()),
+        FAST_STATIC_OMIT_ENV(true, EnvType.OMIT_ENV, false, true, ACC_NATIVE | ACC_STATIC, Annotation.FastNative()),
+        FAST_VIRTUAL(false, EnvType.FULL_ENV, false, false, ACC_NATIVE, Annotation.FastNative()),
+        FAST_VIRTUAL_REPLACE_THIS(false, EnvType.FULL_ENV, true, false, ACC_NATIVE, Annotation.FastNative()),
+        CRITICAL(false, EnvType.NO_ENV, false, true, ACC_NATIVE | ACC_STATIC, Annotation.CriticalNative());
 
-        final boolean allowObjPtrs;
         final boolean requireNativeStub;
         final EnvType envType;
         final boolean replaceThis;
@@ -185,15 +177,19 @@ public class BulkLinker {
         final int flags;
         final Set<Annotation> annotations;
 
-        CallType(boolean allowObjPtrs, boolean requireNativeStub, EnvType envType, boolean replaceThis,
+        CallType(boolean requireNativeStub, EnvType envType, boolean replaceThis,
                  boolean isStatic, int flags, Annotation... annotations) {
-            this.allowObjPtrs = allowObjPtrs;
             this.requireNativeStub = requireNativeStub;
             this.envType = envType;
             this.replaceThis = replaceThis;
             this.isStatic = isStatic;
             this.flags = flags | ACC_PRIVATE;
             this.annotations = Set.of(annotations);
+        }
+
+        public int firstArg() {
+            return envType == EnvType.FULL_ENV ?
+                    (replaceThis ? 1 : 2) : 0;
         }
     }
 
@@ -213,19 +209,12 @@ public class BulkLinker {
                 throw new IllegalArgumentException(String.format(
                         "Call type %s requires first object parameter", call_type));
             }
-            if (call_type == CallType.CRITICAL) {
-                if (Stream.concat(Stream.of(ret), Stream.of(args))
-                        .anyMatch(value -> value == MapType.OBJECT)) {
-                    throw new IllegalArgumentException("MapType.OBJECT incompatible with CallType.CRITICAL");
-                }
+            if (ret == MapType.LOAD_WORD_PTR || ret == MapType.LOAD_JOBJECT) {
+                throw new IllegalArgumentException("Invalid return type MapType." + ret);
             }
-            if (!call_type.allowObjPtrs) {
-                if (Stream.concat(Stream.of(ret), Stream.of(args))
-                        .anyMatch(value -> value == MapType.OBJECT_AS_ADDRESS
-                                || value == MapType.OBJECT_AS_RAW_INT)) {
-                    throw new IllegalArgumentException(String.format(
-                            "Call type %s incompatible with object pointers", call_type));
-                }
+            if (call_type == CallType.CRITICAL && ret == MapType.OBJECT) {
+                throw new IllegalArgumentException(
+                        "MapType.OBJECT return type is incompatible with CallType.CRITICAL");
             }
             boolean requireNativeStub = call_type.requireNativeStub || ret.requireNativeStub
                     || Arrays.stream(args).anyMatch(arg -> arg.requireNativeStub);
@@ -306,7 +295,7 @@ public class BulkLinker {
                                                 regs[0] += 2;
                                                 regs[1] += 2;
                                             }
-                                            case LONG_AS_WORD -> {
+                                            case LONG_AS_WORD, LOAD_WORD_PTR -> {
                                                 if (IS64BIT) {
                                                     ib.move_wide(ib.l(regs[0]), ib.p(regs[1]));
                                                     regs[0] += 2;
@@ -318,7 +307,7 @@ public class BulkLinker {
                                                 }
                                                 regs[1] += 2;
                                             }
-                                            case OBJECT, OBJECT_AS_RAW_INT, OBJECT_AS_ADDRESS ->
+                                            case OBJECT, LOAD_JOBJECT ->
                                                     ib.move_object(ib.l(regs[0]++), ib.p(regs[1]++));
                                             default -> throw shouldNotReachHere();
                                         }
@@ -326,7 +315,7 @@ public class BulkLinker {
 
                                     int call_regs = regs[0] - reserved;
                                     var kind = info.call_type.isStatic ? STATIC : DIRECT;
-                                    ib.invoke_range(kind, raw_id, call_regs, call_regs == 0 ? 0 : ib.l(reserved));
+                                    ib.invoke_range(kind, raw_id, call_regs == 0 ? 0 : ib.l(reserved));
 
                                     switch (info.ret) {
                                         case VOID -> ib.return_void();
@@ -350,7 +339,7 @@ public class BulkLinker {
                                                 ib.return_wide(ib.l(0));
                                             }
                                         }
-                                        case OBJECT, OBJECT_AS_RAW_INT, OBJECT_AS_ADDRESS -> {
+                                        case OBJECT -> {
                                             ib.move_result_object(ib.l(0));
                                             ib.return_object(ib.l(0));
                                         }
@@ -365,29 +354,26 @@ public class BulkLinker {
         return DexIO.write(Dex.of(impl_def));
     }
 
-    private static LLVMTypeRef toLLVMType(LLVMContextRef context, MapType type, boolean stub) {
+    private static LLVMTypeRef toLLVMType(LLVMContextRef context, MapType type) {
         return switch (type) {
             case VOID -> void_t(context);
             case BOOL -> int1_t(context);
             case BYTE -> int8_t(context);
             case SHORT, CHAR -> int16_t(context);
-            case INT, BOOL_AS_INT, OBJECT_AS_RAW_INT -> int32_t(context);
+            case INT, BOOL_AS_INT -> int32_t(context);
             case FLOAT -> float_t(context);
             case LONG -> int64_t(context);
             case DOUBLE -> double_t(context);
-            case OBJECT, LONG_AS_WORD -> intptr_t(context);
-            case OBJECT_AS_ADDRESS -> stub ? int32_t(context) : intptr_t(context);
-            //noinspection UnnecessaryDefault
-            default -> throw shouldNotReachHere();
+            case OBJECT, LONG_AS_WORD, LOAD_WORD_PTR, LOAD_JOBJECT -> intptr_t(context);
         };
     }
 
     private static LLVMTypeRef toLLVMType(LLVMContextRef context, SymbolInfo info, boolean stub) {
-        LLVMTypeRef retType = toLLVMType(context, info.ret, stub);
+        LLVMTypeRef retType = toLLVMType(context, info.ret);
         List<LLVMTypeRef> argTypes = new ArrayList<>(info.args.length + 2);
 
         for (var type : info.args) {
-            argTypes.add(toLLVMType(context, type, stub));
+            argTypes.add(toLLVMType(context, type));
         }
         var call_type = info.call_type;
         if ((call_type.envType == EnvType.FULL_ENV) ||
@@ -398,7 +384,7 @@ public class BulkLinker {
             }
         }
 
-        return function_t(retType, argTypes.toArray(new LLVMTypeRef[0]));
+        return fn_t(retType, argTypes.toArray(new LLVMTypeRef[0]));
     }
 
     private static byte[] generateNativeStub(SymbolInfo info, long symbol_ptr) {
@@ -406,11 +392,12 @@ public class BulkLinker {
         return generateFunctionCodeArray((context, module, builder) -> {
             LLVMTypeRef stub_type = toLLVMType(context, info, true);
             LLVMValueRef stub = LLVMAddFunction(module, function_name, stub_type);
+            no_frame_pointer_elim(stub);
 
             LLVMPositionBuilderAtEnd(builder, LLVMAppendBasicBlock(stub, ""));
 
             LLVMTypeRef target_type = toLLVMType(context, info, false);
-            LLVMValueRef target_ptr = build_const_load_ptr(builder, ptr_t(target_type), symbol_ptr);
+            LLVMValueRef target_ptr = const_fnptr(builder, target_type, symbol_ptr);
 
             LLVMValueRef[] args = LLVMGetParams(stub);
             var call_type = info.call_type;
@@ -419,26 +406,24 @@ public class BulkLinker {
                 args = Arrays.copyOfRange(args,
                         call_type.replaceThis ? 1 : 2, args.length);
             }
-            int index = call_type.envType == EnvType.FULL_ENV ?
-                    (call_type.replaceThis ? 1 : 2) : 0;
+            int index = call_type.firstArg();
             for (var type : info.args) {
-                if (type == MapType.OBJECT_AS_ADDRESS) {
-                    args[index] = buildRawObjectToAddress(builder,
-                            args[index], const_intptr(context, 0));
+                if (type == MapType.LOAD_WORD_PTR) {
+                    args[index] = load_ptr(builder, intptr_t(context), args[index]);
+                } else if (type == MapType.LOAD_JOBJECT) {
+                    args[index] = local_jobj_to_intptr(builder, args[index], const_intptr(context, 0));
                 }
                 index++;
             }
-            LLVMValueRef ret_val = build_call(builder, target_ptr, args);
+            LLVMValueRef ret_val = call(builder, target_ptr, args);
             if (info.ret == MapType.VOID) {
                 LLVMBuildRetVoid(builder);
             } else {
-                if (info.ret == MapType.OBJECT_AS_ADDRESS) {
-                    ret_val = buildAddressToRawObject(
-                            builder, ret_val, const_intptr(context, 0));
-                }
                 LLVMBuildRet(builder, ret_val);
             }
-        }, function_name);
+
+            return stub;
+        });
     }
 
     private static void processASMs(Arena scope, MemorySegment[] symbols, byte[][] code, int[] map) {
@@ -449,13 +434,9 @@ public class BulkLinker {
     }
 
     private static void processNativeStubs(Arena scope, SymbolInfo[] infos, MemorySegment[] symbols, int[] map) {
-        //TODO: indirect pointers may be unnecessary for some architectures
-        MemorySegment pointers = scope.allocate(ADDRESS, map.length);
         byte[][] code = new byte[map.length][];
         for (int i = 0; i < map.length; i++) {
-            long offset = i * ADDRESS.byteSize();
-            pointers.set(ADDRESS, offset, symbols[map[i]]);
-            code[i] = generateNativeStub(infos[map[i]], pointers.nativeAddress() + offset);
+            code[i] = generateNativeStub(infos[map[i]], symbols[map[i]].nativeAddress());
         }
         processASMs(scope, symbols, code, map);
     }
@@ -627,12 +608,12 @@ public class BulkLinker {
         CallSignature[] value();
     }
 
-    private static boolean checkPoisoning(BulkLinker.Tristate poisoning) {
-        return poisoning == BulkLinker.Tristate.NO_MATTER ||
-                ((poisoning == BulkLinker.Tristate.TRUE) == VM.isPoisonReferences());
+    private static boolean checkPoisoning(Tristate poisoning) {
+        return poisoning == Tristate.NO_MATTER ||
+                ((poisoning == Tristate.TRUE) == VM.isPoisonReferences());
     }
 
-    private static boolean checkConditions(BulkLinker.Conditions cond) {
+    private static boolean checkConditions(Conditions cond) {
         return Utils.contains(cond.arch(), CURRENT_INSTRUCTION_SET) &&
                 (cond.min_api() <= SDK_INT && cond.max_api() >= SDK_INT) &&
                 (cond.min_api_full() <= SDK_INT_FULL && cond.max_api_full() >= SDK_INT_FULL) &&

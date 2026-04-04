@@ -10,6 +10,14 @@ import static com.v7878.dex.builder.CodeBuilder.UnOp.INT_TO_BYTE;
 import static com.v7878.dex.builder.CodeBuilder.UnOp.INT_TO_LONG;
 import static com.v7878.dex.builder.CodeBuilder.UnOp.INT_TO_SHORT;
 import static com.v7878.dex.builder.CodeBuilder.UnOp.LONG_TO_INT;
+import static com.v7878.dex.immutable.TypeId.B;
+import static com.v7878.dex.immutable.TypeId.D;
+import static com.v7878.dex.immutable.TypeId.F;
+import static com.v7878.dex.immutable.TypeId.I;
+import static com.v7878.dex.immutable.TypeId.J;
+import static com.v7878.dex.immutable.TypeId.OBJECT;
+import static com.v7878.dex.immutable.TypeId.S;
+import static com.v7878.dex.immutable.TypeId.V;
 import static com.v7878.foreign.MemoryLayout.PathElement.groupElement;
 import static com.v7878.foreign.ValueLayout.ADDRESS;
 import static com.v7878.foreign.ValueLayout.OfChar;
@@ -46,30 +54,28 @@ import static com.v7878.llvm.Core.LLVMSetInstrParamAlignment;
 import static com.v7878.llvm.Core.LLVMStructTypeInContext;
 import static com.v7878.unsafe.AndroidUnsafe.IS64BIT;
 import static com.v7878.unsafe.ArtMethodUtils.registerNativeMethod;
-import static com.v7878.unsafe.DexFileUtils.loadClass;
-import static com.v7878.unsafe.DexFileUtils.openDexFile;
+import static com.v7878.unsafe.ClassUtils.newLoader;
 import static com.v7878.unsafe.JNIUtils.getJNINativeInterfaceOffset;
 import static com.v7878.unsafe.Reflection.getDeclaredMethod;
 import static com.v7878.unsafe.Reflection.getDeclaredMethods;
 import static com.v7878.unsafe.Reflection.unreflect;
 import static com.v7878.unsafe.Utils.handleUncaughtException;
-import static com.v7878.unsafe.Utils.newEmptyClassLoader;
 import static com.v7878.unsafe.Utils.nothrows_run;
 import static com.v7878.unsafe.Utils.searchMethod;
 import static com.v7878.unsafe.Utils.shouldNotReachHere;
 import static com.v7878.unsafe.access.InvokeAccess.MH_INVOKE_EXACT_ID;
 import static com.v7878.unsafe.foreign.ExtraLayouts.WORD;
-import static com.v7878.unsafe.llvm.LLVMBuilder.buildRawObjectToAddress;
-import static com.v7878.unsafe.llvm.LLVMBuilder.build_call;
-import static com.v7878.unsafe.llvm.LLVMBuilder.build_load_ptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.call;
 import static com.v7878.unsafe.llvm.LLVMBuilder.const_intptr;
-import static com.v7878.unsafe.llvm.LLVMBuilder.functionPointerFactory;
-import static com.v7878.unsafe.llvm.LLVMBuilder.intptrFactory;
-import static com.v7878.unsafe.llvm.LLVMBuilder.pointerFactory;
+import static com.v7878.unsafe.llvm.LLVMBuilder.fnptr_factory;
+import static com.v7878.unsafe.llvm.LLVMBuilder.intptr_factory;
+import static com.v7878.unsafe.llvm.LLVMBuilder.load_ptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.local_jobj_to_intptr;
+import static com.v7878.unsafe.llvm.LLVMBuilder.no_frame_pointer_elim;
+import static com.v7878.unsafe.llvm.LLVMBuilder.ptr_factory;
 import static com.v7878.unsafe.llvm.LLVMTypes.double_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.float_t;
-import static com.v7878.unsafe.llvm.LLVMTypes.function_ptr_t;
-import static com.v7878.unsafe.llvm.LLVMTypes.function_t;
+import static com.v7878.unsafe.llvm.LLVMTypes.fn_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int16_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int1_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int32_t;
@@ -77,7 +83,7 @@ import static com.v7878.unsafe.llvm.LLVMTypes.int64_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.int8_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.intptr_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.ptr_t;
-import static com.v7878.unsafe.llvm.LLVMTypes.variadic_function_ptr_t;
+import static com.v7878.unsafe.llvm.LLVMTypes.var_fn_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.void_ptr_t;
 import static com.v7878.unsafe.llvm.LLVMTypes.void_t;
 import static com.v7878.unsafe.llvm.LLVMUtils.generateFunctionCodeSegment;
@@ -126,8 +132,6 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
-
-import dalvik.system.DexFile;
 
 final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
     static {
@@ -222,8 +226,9 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
         throw shouldNotReachHere();
     }
 
-    private static LLVMTypeRef fdToLLVMType(LLVMContextRef context, _FunctionDescriptorImpl descriptor,
-                                            boolean allowsHeapAccess, boolean fullEnv) {
+    private static LLVMTypeRef fdToLLVMType(LLVMContextRef context,
+                                            _FunctionDescriptorImpl descriptor,
+                                            boolean allowsHeapAccess) {
         MemoryLayout retLayout = descriptor.returnLayoutPlain();
         LLVMTypeRef returnType = retLayout == null ? void_t(context) : layoutToLLVMType(context, retLayout);
         List<MemoryLayout> argLayouts = descriptor.argumentLayouts();
@@ -231,7 +236,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
         for (MemoryLayout layout : argLayouts) {
             if (layout instanceof AddressLayout || layout instanceof GroupLayout) {
                 if (allowsHeapAccess) {
-                    argTypes.add(int32_t(context));
+                    argTypes.add(intptr_t(context));
                     argTypes.add(intptr_t(context));
                 } else {
                     argTypes.add(intptr_t(context));
@@ -242,11 +247,9 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 throw shouldNotReachHere();
             }
         }
-        if (fullEnv) {
-            argTypes.add(0, void_ptr_t(context)); // JNIEnv*
-            argTypes.add(1, void_ptr_t(context)); // jclass
-        }
-        return function_t(returnType, argTypes.toArray(new LLVMTypeRef[0]));
+        argTypes.add(0, void_ptr_t(context)); // JNIEnv*
+        argTypes.add(1, void_ptr_t(context)); // jclass
+        return fn_t(returnType, argTypes.toArray(new LLVMTypeRef[0]));
     }
 
     private static LLVMTypeRef sdToLLVMType(
@@ -289,14 +292,13 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
     private static MemorySegment generateNativeDowncallStub(
             Arena scope, _LLVMStorageDescriptor target_descriptor,
             _FunctionDescriptorImpl stub_descriptor, _LinkerOptions options) {
-        final String function_name = "stub";
         return generateFunctionCodeSegment((context, module, builder) -> {
             var sret_attr = LLVMCreateEnumAttribute(context, "sret", 0);
             var byval_attr = LLVMCreateEnumAttribute(context, "byval", 0);
 
-            var stub_type = fdToLLVMType(context, stub_descriptor,
-                    options.allowsHeapAccess(), !options.isCritical());
-            var stub = LLVMAddFunction(module, function_name, stub_type);
+            var stub_type = fdToLLVMType(context, stub_descriptor, options.allowsHeapAccess());
+            var stub = LLVMAddFunction(module, "stub", stub_type);
+            no_frame_pointer_elim(stub);
 
             var target_type = sdToLLVMType(context, target_descriptor,
                     options.firstVariadicArgIndex());
@@ -309,10 +311,10 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 assert options.isCritical();
                 List<LLVMValueRef> out = new ArrayList<>();
                 var tmp = LLVMGetParams(stub);
-                int t = 0;
+                int t = 2; // drop JNIEnv* and jclass
                 for (MemoryLayout layout : stub_descriptor.argumentLayouts()) {
                     if (layout instanceof GroupLayout || layout instanceof AddressLayout) {
-                        out.add(buildRawObjectToAddress(builder, tmp[t++], tmp[t++]));
+                        out.add(local_jobj_to_intptr(builder, tmp[t++], tmp[t++]));
                     } else if (layout instanceof ValueLayout) {
                         out.add(tmp[t++]);
                     } else {
@@ -322,10 +324,8 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 stub_args = out.toArray(new LLVMValueRef[0]);
             } else {
                 stub_args = LLVMGetParams(stub);
-                if (!options.isCritical()) {
-                    // drop JNIEnv* and jclass
-                    stub_args = Arrays.copyOfRange(stub_args, 2, stub_args.length);
-                }
+                // drop JNIEnv* and jclass
+                stub_args = Arrays.copyOfRange(stub_args, 2, stub_args.length);
             }
             assert stub_args.length == stub_descriptor.argumentLayouts().size();
 
@@ -392,7 +392,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 }
             }
 
-            var call = build_call(builder, target, Arrays.copyOf(target_args, count));
+            var call = call(builder, target, Arrays.copyOf(target_args, count));
 
             final int offset = LLVMAttributeFirstArgIndex;
             for (int i = 0; i < count; i++) {
@@ -413,7 +413,9 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
             } else {
                 LLVMBuildRet(builder, call);
             }
-        }, function_name, scope);
+
+            return stub;
+        }, scope);
     }
 
     private static String layoutName(MemoryLayout layout) {
@@ -586,26 +588,26 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
         String stub_name = stubName(descriptor, options, true);
         TypeId stub_id = TypeId.ofName(stub_name);
 
-        FieldId scope_id = FieldId.of(stub_id, scope_field_name, TypeId.OBJECT);
+        FieldId scope_id = FieldId.of(stub_id, scope_field_name, OBJECT);
         MethodId native_stub_id = MethodId.of(stub_id, native_stub_name, native_stub_proto);
 
-        MethodId create_arena_id = MethodId.of(helper_id, "createArena", arena_id, TypeId.J);
+        MethodId create_arena_id = MethodId.of(helper_id, "createArena", arena_id, J);
         MethodId allocate_segment_id = MethodId.of(helper_id,
-                "allocateSegment", ms_id, sa_id, TypeId.J, TypeId.J);
+                "allocateSegment", ms_id, sa_id, J, J);
         MethodId allocate_copy_id = MethodId.of(helper_id,
-                "allocateCopy", ms_id, ms_id, arena_id, TypeId.J, TypeId.J);
-        MethodId close_arena_id = MethodId.of(helper_id, "closeArena", TypeId.V, arena_id);
+                "allocateCopy", ms_id, ms_id, arena_id, J, J);
+        MethodId close_arena_id = MethodId.of(helper_id, "closeArena", V, arena_id);
         MethodId check_capture_segment_id = MethodId.of(helper_id, "checkCaptureSegment", ms_id, ms_id);
         MethodId make_segment_id = MethodId.of(helper_id,
-                "makeSegment", ms_id, TypeId.J, TypeId.J, TypeId.J);
+                "makeSegment", ms_id, J, J, J);
         MethodId unbox_symbol_segment_id = MethodId.of(helper_id,
-                "unboxSymbolSegment", TypeId.J, ms_id);
-        MethodId unbox_segment_id = MethodId.of(helper_id, "unboxSegment", TypeId.J, ms_id);
-        MethodId get_base_id = MethodId.of(helper_id, "getBase", TypeId.OBJECT, ms_id);
-        MethodId get_offset_id = MethodId.of(helper_id, "getOffset", TypeId.J, ms_id);
-        MethodId acquire_id = MethodId.of(helper_id, "acquire", TypeId.V, ms_id);
-        MethodId release_id = MethodId.of(helper_id, "release", TypeId.V, ms_id);
-        MethodId put_errno_id = MethodId.of(helper_id, "putErrno", TypeId.V, ms_id);
+                "unboxSymbolSegment", J, ms_id);
+        MethodId unbox_segment_id = MethodId.of(helper_id, "unboxSegment", J, ms_id);
+        MethodId get_base_id = MethodId.of(helper_id, "getBase", OBJECT, ms_id);
+        MethodId get_offset_id = MethodId.of(helper_id, "getOffset", J, ms_id);
+        MethodId acquire_id = MethodId.of(helper_id, "acquire", V, ms_id);
+        MethodId release_id = MethodId.of(helper_id, "release", V, ms_id);
+        MethodId put_errno_id = MethodId.of(helper_id, "putErrno", V, ms_id);
 
         var has_arena = !heap_access && Stream.of(args)
                 .anyMatch(layout -> layout instanceof GroupLayout);
@@ -634,22 +636,22 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
 
         Consumer<CodeBuilder> create_arena = ib -> ib
                 .const_wide(ib.l(0), max_arena_size)
-                .invoke_range(STATIC, create_arena_id, 2, ib.l(0))
+                .invoke_range(STATIC, create_arena_id, ib.l(0))
                 .move_result_object(ib.l(arena_reg));
 
         Consumer<CodeBuilder> close_arena = ib -> ib
                 .invoke(STATIC, close_arena_id, ib.l(arena_reg));
 
         ClassDef stub_def = ClassBuilder.build(stub_id, cb -> cb
-                .withSuperClass(TypeId.OBJECT)
+                .withSuperClass(OBJECT)
                 .withField(fb -> fb
                         .of(scope_id)
                         .withFlags(ACC_PRIVATE | ACC_STATIC)
                 )
                 .withMethod(mb -> mb
                         .withName(init_scope_name)
-                        .withReturnType(TypeId.V)
-                        .withParameterTypes(TypeId.OBJECT)
+                        .withReturnType(V)
+                        .withParameterTypes(OBJECT)
                         .withFlags(ACC_PRIVATE | ACC_STATIC)
                         .withCode(0, ib -> ib
                                 .generate_lines()
@@ -661,7 +663,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                         .of(native_stub_id)
                         .withFlags(ACC_PRIVATE | ACC_STATIC | ACC_NATIVE)
                         .if_(options.isCritical(), mb2 -> mb2
-                                .withAnnotations(Annotation.CriticalNative())
+                                .withAnnotations(Annotation.FastNative())
                         )
                 )
                 .withMethod(mb -> mb
@@ -676,13 +678,12 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                 .commit(ib2 -> {
                                     int symbol_arg = regs[1]++;
 
-                                    ib2.invoke_range(STATIC, acquire_id,
-                                            1, ib2.p(symbol_arg));
+                                    ib2.invoke_range(STATIC, acquire_id, ib2.p(symbol_arg));
                                     ib2.label(label_for_reg("try_segment", symbol_arg, true));
                                     acquired_segments.add(symbol_arg);
 
                                     ib2.invoke_range(STATIC, unbox_symbol_segment_id,
-                                            1, ib2.p(symbol_arg));
+                                            ib2.p(symbol_arg));
                                     ib2.move_result_wide(ib2.l(0));
                                     if (IS64BIT) {
                                         ib2.move_wide(ib2.l(regs[0]), ib2.l(0));
@@ -701,20 +702,19 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                     ib2.const_wide(ib2.l(1), ret.byteSize());
                                     ib2.const_wide(ib2.l(3), ret.byteAlignment());
 
-                                    ib2.invoke_range(STATIC, allocate_segment_id,
-                                            5, ib2.l(0));
+                                    ib2.invoke_range(STATIC, allocate_segment_id, ib2.l(0));
                                     ib2.move_result_object(ib2.l(0));
                                     ib2.move_object(ib2.p(allocator_arg[0]), ib2.l(0));
 
                                     if (heap_access) {
                                         ib2.invoke_range(STATIC, get_base_id,
-                                                1, ib2.p(allocator_arg[0]));
+                                                ib2.p(allocator_arg[0]));
                                         ib2.move_result_object(ib2.l(0));
                                         ib2.move_object(ib2.l(regs[0]++), ib2.l(0));
                                     }
                                     ib2.invoke_range(STATIC,
                                             heap_access ? get_offset_id : unbox_segment_id,
-                                            1, ib2.p(allocator_arg[0]));
+                                            ib2.p(allocator_arg[0]));
                                     ib2.move_result_wide(ib2.l(0));
                                     if (IS64BIT) {
                                         ib2.move_wide(ib2.l(regs[0]), ib2.l(0));
@@ -728,12 +728,12 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                     state_arg[0] = regs[1]++;
 
                                     ib2.invoke_range(STATIC, check_capture_segment_id,
-                                            1, ib2.p(state_arg[0]));
+                                            ib2.p(state_arg[0]));
                                     ib2.move_result_object(ib2.l(0));
                                     ib2.move_object(ib2.p(state_arg[0]), ib2.l(0));
 
                                     ib2.invoke_range(STATIC, acquire_id,
-                                            1, ib2.p(state_arg[0]));
+                                            ib2.p(state_arg[0]));
                                     ib2.label(label_for_reg("try_segment", state_arg[0], true));
                                     acquired_segments.add(state_arg[0]);
                                 })
@@ -757,25 +757,25 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                                 ib2.const_wide(ib2.l(4), gl.byteAlignment());
 
                                                 ib2.invoke_range(STATIC, allocate_copy_id,
-                                                        6, ib2.l(0));
+                                                        ib2.l(0));
                                                 ib2.move_result_object(ib2.l(0));
                                                 ib2.move_object(ib2.p(segment_reg), ib2.l(0));
                                             } else {
                                                 ib2.invoke_range(STATIC, acquire_id,
-                                                        1, ib2.p(segment_reg));
+                                                        ib2.p(segment_reg));
                                                 ib2.label(label_for_reg("try_segment", segment_reg, true));
                                                 acquired_segments.add(segment_reg);
                                             }
 
                                             if (heap_access) {
                                                 ib2.invoke_range(STATIC, get_base_id,
-                                                        1, ib2.p(segment_reg));
+                                                        ib2.p(segment_reg));
                                                 ib2.move_result_object(ib2.l(0));
                                                 ib2.move_object(ib2.l(regs[0]++), ib2.l(0));
                                             }
                                             ib2.invoke_range(STATIC,
                                                     heap_access ? get_offset_id : unbox_segment_id,
-                                                    1, ib2.p(segment_reg));
+                                                    ib2.p(segment_reg));
                                             ib2.move_result_wide(ib2.l(0));
                                             if (IS64BIT) {
                                                 ib2.move_wide(ib2.l(regs[0]), ib2.l(0));
@@ -790,15 +790,14 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                     }
                                 })
 
-                                .invoke_range(STATIC, native_stub_id,
-                                        native_ins, ib.l(reserved[0]))
+                                .invoke_range(STATIC, native_stub_id, ib.l(reserved[0]))
                                 .if_(native_ret_reg != -1, ib2 -> ib2.
                                         move_result_shorty(native_ret_shorty,
                                                 ib2.l(native_ret_reg))
                                 )
 
                                 .if_((capturedStateMask & ERRNO_MASK) != 0, ib2 -> ib2
-                                        .invoke_range(STATIC, put_errno_id, 1, ib2.p(state_arg[0]))
+                                        .invoke_range(STATIC, put_errno_id, ib2.p(state_arg[0]))
                                 )
 
                                 .commit(ib2 -> {
@@ -806,8 +805,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                         int segment_reg = acquired_segments.get(i);
                                         ib2.label(label_for_reg("try_segment", segment_reg, false));
 
-                                        ib2.invoke_range(STATIC, release_id,
-                                                1, ib2.p(segment_reg));
+                                        ib2.invoke_range(STATIC, release_id, ib2.p(segment_reg));
                                     }
                                 })
                                 .label("try_arena_end")
@@ -832,7 +830,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
 
                                             ib2.const_wide(ib2.l(2), size);
                                             ib2.const_wide(ib2.l(4), align);
-                                            ib2.invoke_range(STATIC, make_segment_id, 6, ib2.l(0));
+                                            ib2.invoke_range(STATIC, make_segment_id, ib2.l(0));
                                             ib2.move_result_object(ib2.l(0));
                                             ib2.return_object(ib2.l(0));
                                         }
@@ -873,8 +871,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                         ib2.label(label_for_reg("catch_segment", segment_reg, true));
 
                                         ib2.move_exception(ib2.l(exception_reg));
-                                        ib2.invoke_range(STATIC, release_id,
-                                                1, ib2.p(segment_reg));
+                                        ib2.invoke_range(STATIC, release_id, ib2.p(segment_reg));
                                         ib2.throw_(ib2.l(exception_reg));
 
                                         ib2.label(label_for_reg("catch_segment", segment_reg, false));
@@ -907,13 +904,10 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 )
         );
 
-        DexFile dex = openDexFile(DexIO.write(Dex.of(stub_def)));
-        Class<?> stub_class = loadClass(dex, stub_name, newEmptyClassLoader());
 
-        if (options.allowsHeapAccess()) {
-            // reinterpret cast Object to int
-            ClassUtils.forceClassVerified(stub_class);
-        }
+        var loader = _AndroidLinkerImpl.class.getClassLoader();
+        loader = newLoader(loader, DexIO.write(Dex.of(stub_def)));
+        Class<?> stub_class = ClassUtils.forName(stub_name, loader);
 
         var methods = getDeclaredMethods(stub_class);
 
@@ -927,11 +921,6 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
         Method java_function = searchMethod(methods,
                 java_stub_name, java_stub_type.parameterArray());
         return unreflect(java_function);
-    }
-
-    private static MethodType fixObjectParameters(MethodType stubType) {
-        return MethodType.methodType(stubType.returnType(), stubType.parameterList().stream()
-                .map(a -> a == Object.class ? int.class : a).toArray(Class[]::new));
     }
 
     @Override
@@ -948,7 +937,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
 
         MemorySegment nativeStub = generateNativeDowncallStub(
                 Arena.ofAuto(), target_descriptor, stub_descriptor, options);
-        return generateJavaDowncallStub(nativeStub, fixObjectParameters(stubType), descriptor, options);
+        return generateJavaDowncallStub(nativeStub, stubType, descriptor, options);
     }
 
     private static int computeEnvIndex(_LLVMStorageDescriptor stub_descriptor, _LinkerOptions options) {
@@ -970,24 +959,24 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
             private static final Arena SCOPE = Arena.ofAuto();
 
             private static final Function<LLVMContextRef, LLVMValueRef> UNCAUGHT_EXCEPTION_MSG =
-                    intptrFactory(SCOPE.allocateFrom("Uncaught exception in upcall:"));
+                    intptr_factory(SCOPE.allocateFrom("Uncaught exception in upcall:"));
 
             private static final Function<LLVMBuilderRef, LLVMValueRef> INIT =
-                    functionPointerFactory(SCOPE, ENVGetter.INSTANCE, context ->
-                            function_ptr_t(intptr_t(context)));
+                    fnptr_factory(SCOPE, ENVGetter.INSTANCE, context ->
+                            fn_t(intptr_t(context)));
 
             private static final BiFunction<LLVMBuilderRef, LLVMValueRef, LLVMValueRef> CALL =
-                    pointerFactory(getJNINativeInterfaceOffset("CallStaticVoidMethod"), context ->
-                            variadic_function_ptr_t(void_t(context), intptr_t(context),
+                    ptr_factory(getJNINativeInterfaceOffset("CallStaticVoidMethod"), context ->
+                            var_fn_t(void_t(context), intptr_t(context),
                                     intptr_t(context), intptr_t(context)));
 
             private static final BiFunction<LLVMBuilderRef, LLVMValueRef, LLVMValueRef> EXCEPTION_CHECK =
-                    pointerFactory(getJNINativeInterfaceOffset("ExceptionCheck"), context ->
-                            function_ptr_t(int1_t(context), intptr_t(context)));
+                    ptr_factory(getJNINativeInterfaceOffset("ExceptionCheck"), context ->
+                            fn_t(int1_t(context), intptr_t(context)));
 
             private static final BiFunction<LLVMBuilderRef, LLVMValueRef, LLVMValueRef> FATAL_ERROR =
-                    pointerFactory(getJNINativeInterfaceOffset("FatalError"), context ->
-                            function_ptr_t(void_t(context), intptr_t(context), intptr_t(context)));
+                    ptr_factory(getJNINativeInterfaceOffset("FatalError"), context ->
+                            fn_t(void_t(context), intptr_t(context), intptr_t(context)));
         }
 
         final String function_name = "stub";
@@ -997,6 +986,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
 
             var stub_type = sdToLLVMType(context, stub_descriptor, -1);
             var stub = LLVMAddFunction(module, function_name, stub_type);
+            no_frame_pointer_elim(stub);
 
             var body = LLVMAppendBasicBlock(stub, "");
             var normal_exit = LLVMAppendBasicBlock(stub, "");
@@ -1009,8 +999,8 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
 
             int env_index = computeEnvIndex(stub_descriptor, options);
             var env_ptr = env_index >= 0 ? stub_args[env_index] :
-                    build_call(builder, Holder.INIT.apply(builder));
-            var env_iface = build_load_ptr(builder, intptr_t(context), env_ptr);
+                    call(builder, Holder.INIT.apply(builder));
+            var env_iface = load_ptr(builder, intptr_t(context), env_ptr);
 
             int count = 0; // current index in target_args[] and their count
             int index = 0; // current index in stub_args[]
@@ -1093,17 +1083,17 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 }
             }
 
-            build_call(builder, target, Arrays.copyOf(target_args, count));
+            call(builder, target, Arrays.copyOf(target_args, count));
             if (options.allowExceptions()) {
                 LLVMBuildBr(builder, normal_exit);
             } else {
                 var uncaught_exception = LLVMAppendBasicBlock(stub, "");
-                var test_exceptions = build_call(builder,
+                var test_exceptions = call(builder,
                         Holder.EXCEPTION_CHECK.apply(builder, env_iface), env_ptr);
                 LLVMBuildCondBr(builder, test_exceptions, uncaught_exception, normal_exit);
 
                 LLVMPositionBuilderAtEnd(builder, uncaught_exception);
-                build_call(builder, Holder.FATAL_ERROR.apply(builder, env_iface),
+                call(builder, Holder.FATAL_ERROR.apply(builder, env_iface),
                         env_ptr, Holder.UNCAUGHT_EXCEPTION_MSG.apply(context));
                 LLVMBuildUnreachable(builder);
             }
@@ -1116,7 +1106,9 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 LLVMSetAlignment(load, Math.toIntExact(retLoad.byteAlignment()));
                 LLVMBuildRet(builder, load);
             }
-        }, function_name, scope);
+
+            return stub;
+        }, scope);
     }
 
     @DoNotObfuscate
@@ -1202,20 +1194,20 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
         TypeId stub_id = TypeId.ofName(stub_name);
 
         MethodId create_scope_id = MethodId.of(helper_id, "createScope", scope_id);
-        MethodId close_scope_id = MethodId.of(helper_id, "closeScope", TypeId.V, scope_id);
+        MethodId close_scope_id = MethodId.of(helper_id, "closeScope", V, scope_id);
         MethodId handle_exception_id = MethodId.of(helper_id,
-                "handleException", TypeId.V, TypeId.of(Throwable.class));
+                "handleException", V, TypeId.of(Throwable.class));
         MethodId make_segment_id = MethodId.of(helper_id, "makeSegment",
-                ms_id, TypeId.J, TypeId.J, TypeId.J, scope_id);
+                ms_id, J, J, J, scope_id);
 
-        MethodId put_byte_id = MethodId.of(helper_id, "putByte", TypeId.V, TypeId.J, TypeId.B);
-        MethodId put_short_id = MethodId.of(helper_id, "putShort", TypeId.V, TypeId.J, TypeId.S);
-        MethodId put_int_id = MethodId.of(helper_id, "putInt", TypeId.V, TypeId.J, TypeId.I);
-        MethodId put_float_id = MethodId.of(helper_id, "putFloat", TypeId.V, TypeId.J, TypeId.F);
-        MethodId put_long_id = MethodId.of(helper_id, "putLong", TypeId.V, TypeId.J, TypeId.J);
-        MethodId put_double_id = MethodId.of(helper_id, "putDouble", TypeId.V, TypeId.J, TypeId.D);
-        MethodId put_address_id = MethodId.of(helper_id, "putAddress", TypeId.V, TypeId.J, ms_id);
-        MethodId put_segment_id = MethodId.of(helper_id, "putSegment", TypeId.V, TypeId.J, ms_id, TypeId.J);
+        MethodId put_byte_id = MethodId.of(helper_id, "putByte", V, J, B);
+        MethodId put_short_id = MethodId.of(helper_id, "putShort", V, J, S);
+        MethodId put_int_id = MethodId.of(helper_id, "putInt", V, J, I);
+        MethodId put_float_id = MethodId.of(helper_id, "putFloat", V, J, F);
+        MethodId put_long_id = MethodId.of(helper_id, "putLong", V, J, J);
+        MethodId put_double_id = MethodId.of(helper_id, "putDouble", V, J, D);
+        MethodId put_address_id = MethodId.of(helper_id, "putAddress", V, J, ms_id);
+        MethodId put_segment_id = MethodId.of(helper_id, "putSegment", V, J, ms_id, J);
 
         int target_ins = target_proto.countInputRegisters();
 
@@ -1248,7 +1240,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 .throw_(ib.l(exception_reg));
 
         ClassDef stub_def = ClassBuilder.build(stub_id, cb -> cb
-                .withSuperClass(TypeId.OBJECT)
+                .withSuperClass(OBJECT)
                 .withMethod(mb -> mb
                         .withFlags(ACC_PRIVATE | ACC_STATIC)
                         .withName(method_name)
@@ -1300,7 +1292,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                                             }
                                             ib2.const_wide(ib2.l(2), size);
                                             ib2.const_wide(ib2.l(4), align);
-                                            ib2.invoke_range(STATIC, make_segment_id, 7, ib2.l(0));
+                                            ib2.invoke_range(STATIC, make_segment_id, ib2.l(0));
                                             ib2.move_result_object(ib2.l(0));
                                             ib2.move_object(ib2.l(regs[0]++), ib2.l(0));
                                         } else {
@@ -1341,23 +1333,23 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
 
                                     if (ret instanceof OfByte || ret instanceof OfBoolean) {
                                         ib2.unop(INT_TO_BYTE, ib2.l(2), ib2.l(2));
-                                        ib2.invoke_range(STATIC, put_byte_id, 3, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_byte_id, ib2.l(0));
                                     } else if (ret instanceof OfShort | ret instanceof OfChar) {
                                         ib2.unop(INT_TO_SHORT, ib2.l(2), ib2.l(2));
-                                        ib2.invoke_range(STATIC, put_short_id, 3, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_short_id, ib2.l(0));
                                     } else if (ret instanceof OfInt) {
-                                        ib2.invoke_range(STATIC, put_int_id, 3, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_int_id, ib2.l(0));
                                     } else if (ret instanceof OfFloat) {
-                                        ib2.invoke_range(STATIC, put_float_id, 3, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_float_id, ib2.l(0));
                                     } else if (ret instanceof OfLong) {
-                                        ib2.invoke_range(STATIC, put_long_id, 4, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_long_id, ib2.l(0));
                                     } else if (ret instanceof OfDouble) {
-                                        ib2.invoke_range(STATIC, put_double_id, 4, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_double_id, ib2.l(0));
                                     } else if (ret instanceof AddressLayout) {
-                                        ib2.invoke_range(STATIC, put_address_id, 3, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_address_id, ib2.l(0));
                                     } else if (ret instanceof GroupLayout gl) {
                                         ib2.const_wide(ib2.l(3), gl.byteSize());
-                                        ib2.invoke_range(STATIC, put_segment_id, 5, ib2.l(0));
+                                        ib2.invoke_range(STATIC, put_segment_id, ib2.l(0));
                                     } else {
                                         throw shouldNotReachHere();
                                     }
@@ -1394,8 +1386,9 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 )
         );
 
-        DexFile dex = openDexFile(DexIO.write(Dex.of(stub_def)));
-        Class<?> stub_class = loadClass(dex, stub_name, newEmptyClassLoader());
+        var loader = _AndroidLinkerImpl.class.getClassLoader();
+        loader = newLoader(loader, DexIO.write(Dex.of(stub_def)));
+        Class<?> stub_class = ClassUtils.forName(stub_name, loader);
 
         return getDeclaredMethod(stub_class, method_name, stub_type.parameterArray());
     }

@@ -3,7 +3,9 @@ package com.v7878.unsafe.llvm;
 import static com.v7878.llvm.Analysis.LLVMVerifyModule;
 import static com.v7878.llvm.Core.LLVMCreateBuilderInContext;
 import static com.v7878.llvm.Core.LLVMCreatePassManager;
+import static com.v7878.llvm.Core.LLVMGetValueName;
 import static com.v7878.llvm.Core.LLVMModuleCreateWithNameInContext;
+import static com.v7878.llvm.Core.LLVMPrintModuleToString;
 import static com.v7878.llvm.Core.LLVMRunPassManager;
 import static com.v7878.llvm.ObjectFile.LLVMCreateObjectFile;
 import static com.v7878.llvm.ObjectFile.LLVMGetSectionSegment;
@@ -19,6 +21,7 @@ import static com.v7878.llvm.PassManagerBuilder.LLVMPassManagerBuilderCreate;
 import static com.v7878.llvm.PassManagerBuilder.LLVMPassManagerBuilderPopulateModulePassManager;
 import static com.v7878.llvm.TargetMachine.LLVMCodeGenFileType.LLVMObjectFile;
 import static com.v7878.llvm.TargetMachine.LLVMTargetMachineEmitToMemoryBuffer;
+import static com.v7878.llvm.Types.LLVMValueRef;
 import static com.v7878.unsafe.Utils.shouldNotHappen;
 import static com.v7878.unsafe.llvm.LLVMGlobals.newContext;
 import static com.v7878.unsafe.llvm.LLVMGlobals.newDefaultMachine;
@@ -30,7 +33,6 @@ import com.v7878.llvm.LLVMException;
 import com.v7878.llvm.ObjectFile.LLVMObjectFileRef;
 import com.v7878.llvm.Types.LLVMBuilderRef;
 import com.v7878.llvm.Types.LLVMContextRef;
-import com.v7878.llvm.Types.LLVMMemoryBufferRef;
 import com.v7878.llvm.Types.LLVMModuleRef;
 import com.v7878.unsafe.NativeCodeBlob;
 
@@ -77,18 +79,23 @@ public class LLVMUtils {
     }
 
     public interface Generator {
-        void generate(LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder);
+        LLVMValueRef generate(LLVMContextRef context, LLVMModuleRef module, LLVMBuilderRef builder);
     }
 
-    public static LLVMMemoryBufferRef generateModuleToBuffer(Generator generator) throws LLVMException {
+    private static byte[] generateCode(Generator generator) throws LLVMException {
         Objects.requireNonNull(generator);
 
         try (var context = newContext(); var builder = LLVMCreateBuilderInContext(context);
              var module = LLVMModuleCreateWithNameInContext("generic", context)) {
 
-            generator.generate(context, module, builder);
+            var function = generator.generate(context, module, builder);
+            var name = LLVMGetValueName(function);
 
-            LLVMVerifyModule(module);
+            try {
+                LLVMVerifyModule(module);
+            } catch (LLVMException e) {
+                throw new LLVMException(e.getMessage() + "\n" + LLVMPrintModuleToString(module), e);
+            }
 
             try (var pass_manager = LLVMCreatePassManager()) {
                 try (var pmb = LLVMPassManagerBuilderCreate()) {
@@ -98,29 +105,25 @@ public class LLVMUtils {
             }
 
             try (var machine = newDefaultMachine()) {
-                return LLVMTargetMachineEmitToMemoryBuffer(machine, module, LLVMObjectFile);
+                var buffer = LLVMTargetMachineEmitToMemoryBuffer(machine, module, LLVMObjectFile);
+                try (var of = LLVMCreateObjectFile(buffer)) {
+                    return getFunctionCode(of, name).toArray(ValueLayout.JAVA_BYTE);
+                }
             }
         }
     }
 
-    public static byte[] generateFunctionCodeArray(Generator generator, String name) {
+    public static byte[] generateFunctionCodeArray(Generator generator) {
         try {
-            var buf = generateModuleToBuffer(generator);
-            try (var of = LLVMCreateObjectFile(buf)) {
-                return getFunctionCode(of, name).toArray(ValueLayout.JAVA_BYTE);
-            }
+            return generateCode(generator);
         } catch (LLVMException e) {
             throw shouldNotHappen(e);
         }
     }
 
-    public static MemorySegment generateFunctionCodeSegment(Generator generator, String name, Arena scope) {
+    public static MemorySegment generateFunctionCodeSegment(Generator generator, Arena scope) {
         try {
-            var buf = generateModuleToBuffer(generator);
-            try (var of = LLVMCreateObjectFile(buf)) {
-                MemorySegment code = getFunctionCode(of, name);
-                return NativeCodeBlob.makeCodeBlob(scope, code)[0];
-            }
+            return NativeCodeBlob.makeCodeBlob(scope, generateCode(generator))[0];
         } catch (LLVMException e) {
             throw shouldNotHappen(e);
         }

@@ -3,7 +3,6 @@ package com.v7878.unsafe;
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Process.FIRST_APPLICATION_UID;
 import static com.v7878.foreign.ValueLayout.ADDRESS;
-import static com.v7878.unsafe.Stack.getStackClass1;
 
 import android.util.Log;
 
@@ -24,10 +23,10 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,6 +38,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
+import java.util.zip.Adler32;
 
 public class Utils {
     public static final boolean DEBUG_BUILD = BuildConfig.DEBUG;
@@ -176,6 +176,16 @@ public class Utils {
         return searchExecutable(executables, name, true, params);
     }
 
+    public static int adler32(byte[] data) {
+        Adler32 adler = new Adler32();
+        adler.update(data);
+        return (int) adler.getValue();
+    }
+
+    public static int adler32(String data) {
+        return adler32(data.getBytes(StandardCharsets.UTF_8));
+    }
+
     public static boolean checkClassExists(ClassLoader loader, String name) {
         try {
             Class.forName(name, false, loader);
@@ -185,13 +195,12 @@ public class Utils {
         }
     }
 
+    // Predictable sequence for potential caching
     public static String generateClassName(ClassLoader loader, String base) {
-        class Holder {
-            static final Random RANDOM = new Random();
-        }
         String name = null;
         while (name == null || checkClassExists(loader, name)) {
-            name = String.format("%s_%016X", base, Holder.RANDOM.nextLong());
+            name = String.format("%s_%08X", base,
+                    adler32(name == null ? base : name));
         }
         return name;
     }
@@ -342,16 +351,6 @@ public class Utils {
 
     public static String toHexString(long value) {
         return "0x" + Long.toHexString(value);
-    }
-
-    public static ClassLoader newEmptyClassLoader(ClassLoader parent) {
-        return new ClassLoader(parent) {
-        };
-    }
-
-    @DoNotShrink // TODO: DoNotInline // caller-sensitive
-    public static ClassLoader newEmptyClassLoader() {
-        return newEmptyClassLoader(getStackClass1().getClassLoader());
     }
 
     public static RuntimeException newIllegalArgumentException(String message) {

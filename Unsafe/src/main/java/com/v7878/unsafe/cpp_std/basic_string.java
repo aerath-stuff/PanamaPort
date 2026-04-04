@@ -8,6 +8,7 @@ import static com.v7878.foreign.ValueLayout.JAVA_BYTE;
 import static com.v7878.foreign.ValueLayout.JAVA_INT;
 import static com.v7878.foreign.ValueLayout.JAVA_LONG;
 import static com.v7878.unsafe.AndroidUnsafe.IS64BIT;
+import static com.v7878.unsafe.misc.Math.ulong;
 
 import com.v7878.foreign.Arena;
 import com.v7878.foreign.MemoryLayout;
@@ -29,7 +30,7 @@ public final class basic_string {
     public basic_string(MemoryLayout element) {
         this.ELEMENT = Objects.requireNonNull(element);
         if (element.byteAlignment() > 8) {
-            throw new IllegalArgumentException("Elements with alihnment more than 8 is not supported");
+            throw new IllegalArgumentException("Elements with alignment more than 8 is not supported");
         }
         this.LONG_LAYOUT = structLayout(sequenceLayout(3, ADDRESS));
         long min_cap = (LONG_LAYOUT.byteSize() - 1) / ELEMENT.byteSize();
@@ -50,7 +51,7 @@ public final class basic_string {
         }
 
         private static long get_word(MemorySegment ptr, long offset) {
-            return IS64BIT ? ptr.get(JAVA_LONG, offset) : (ptr.get(JAVA_INT, offset) & 0xffffffffL);
+            return IS64BIT ? ptr.get(JAVA_LONG, offset) : ulong(ptr.get(JAVA_INT, offset));
         }
 
         public boolean is_short() {

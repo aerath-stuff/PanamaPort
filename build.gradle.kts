@@ -9,6 +9,8 @@ subprojects {
     afterEvaluate {
         if (plugins.hasPlugin("com.android.library")) {
             configure<com.android.build.api.dsl.LibraryExtension> {
+                enableKotlin = false
+
                 compileSdk {
                     version = release(36)
                 }

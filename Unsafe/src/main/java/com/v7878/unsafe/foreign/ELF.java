@@ -9,6 +9,7 @@ import static com.v7878.foreign.ValueLayout.JAVA_LONG;
 import static com.v7878.foreign.ValueLayout.JAVA_SHORT;
 import static com.v7878.unsafe.AndroidUnsafe.IS64BIT;
 import static com.v7878.unsafe.Utils.shouldNotHappen;
+import static com.v7878.unsafe.misc.Math.ulong;
 
 import com.v7878.foreign.GroupLayout;
 import com.v7878.foreign.MemorySegment;
@@ -193,7 +194,7 @@ class ELF {
     }
 
     private static long getWord(ByteBuffer bb, int pos) {
-        return IS64BIT ? bb.getLong(pos) : bb.getInt(pos) & 0xffffffffL;
+        return IS64BIT ? bb.getLong(pos) : ulong(bb.getInt(pos));
     }
 
     private static int strlen(ByteBuffer bb, int pos) {
@@ -281,6 +282,7 @@ class ELF {
             return findSymbol(name, bias, STT_FUNC);
         }
 
+        @SuppressWarnings("unused")
         @DangerLevel(DangerLevel.VERY_CAREFUL)
         public MemorySegment findObject(String name, long bias) {
             return findSymbol(name, bias, STT_OBJECT);

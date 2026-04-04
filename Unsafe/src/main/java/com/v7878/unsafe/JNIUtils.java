@@ -18,10 +18,10 @@ import static com.v7878.unsafe.foreign.BulkLinker.CallType.FAST_STATIC;
 import static com.v7878.unsafe.foreign.BulkLinker.CallType.FAST_VIRTUAL_REPLACE_THIS;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.BOOL;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.INT;
+import static com.v7878.unsafe.foreign.BulkLinker.MapType.LOAD_JOBJECT;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.LONG;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.LONG_AS_WORD;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.OBJECT;
-import static com.v7878.unsafe.foreign.BulkLinker.MapType.OBJECT_AS_ADDRESS;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.VOID;
 import static com.v7878.unsafe.foreign.LibArt.ART;
 
@@ -494,7 +494,7 @@ public class JNIUtils {
         abstract void DeleteGlobalRef(long env, long ref);
 
         @LibrarySymbol(name = "_ZN3art9JNIEnvExt11NewLocalRefEPNS_6mirror6ObjectE")
-        @CallSignature(type = CRITICAL, ret = LONG_AS_WORD, args = {LONG_AS_WORD, OBJECT_AS_ADDRESS})
+        @CallSignature(type = CRITICAL, ret = LONG_AS_WORD, args = {LONG_AS_WORD, LOAD_JOBJECT})
         abstract long NewLocalRef(long env, Object obj);
 
         @LibrarySymbol(name = "_ZN3art9JNIEnvExt14DeleteLocalRefEP8_jobject")

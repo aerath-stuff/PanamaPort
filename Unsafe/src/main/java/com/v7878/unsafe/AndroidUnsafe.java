@@ -6,8 +6,8 @@ import static com.v7878.unsafe.Utils.nothrows_run;
 import static com.v7878.unsafe.misc.Math.convEndian16;
 import static com.v7878.unsafe.misc.Math.convEndian32;
 import static com.v7878.unsafe.misc.Math.convEndian64;
-import static com.v7878.unsafe.misc.Math.toUnsignedInt;
-import static com.v7878.unsafe.misc.Math.toUnsignedLong;
+import static com.v7878.unsafe.misc.Math.uint;
+import static com.v7878.unsafe.misc.Math.ulong;
 
 import com.v7878.r8.annotations.AlwaysInline;
 import com.v7878.r8.annotations.DoNotShrink;
@@ -165,7 +165,7 @@ public class AndroidUnsafe {
 
     @AlwaysInline
     public static long arrayBaseOffset(Class<?> clazz) {
-        long out = SunUnsafe.arrayBaseOffset(clazz) & 0xffffffffL;
+        long out = ulong(SunUnsafe.arrayBaseOffset(clazz));
         check(out != 0, IllegalStateException::new);
         return out;
     }
@@ -483,7 +483,7 @@ public class AndroidUnsafe {
 
     @AlwaysInline
     public static long getWordO(Object obj, long offset) {
-        return IS64BIT ? getLongO(obj, offset) : getIntO(obj, offset) & 0xffffffffL;
+        return IS64BIT ? getLongO(obj, offset) : ulong(getIntO(obj, offset));
     }
 
     @AlwaysInline
@@ -497,7 +497,7 @@ public class AndroidUnsafe {
 
     @AlwaysInline
     public static long getWordN(long address) {
-        return IS64BIT ? getLongN(address) : getIntN(address) & 0xffffffffL;
+        return IS64BIT ? getLongN(address) : ulong(getIntN(address));
     }
 
     @AlwaysInline
@@ -511,7 +511,7 @@ public class AndroidUnsafe {
 
     @AlwaysInline
     public static long getWord(Object obj, long offset) {
-        return IS64BIT ? getLong(obj, offset) : getInt(obj, offset) & 0xffffffffL;
+        return IS64BIT ? getLong(obj, offset) : ulong(getInt(obj, offset));
     }
 
     @AlwaysInline
@@ -542,48 +542,48 @@ public class AndroidUnsafe {
 
     @AlwaysInline
     private static long makeLong(int i0, int i1) {
-        return (toUnsignedLong(i0) << pickPos(32, 0))
-                | (toUnsignedLong(i1) << pickPos(32, 32));
+        return (ulong(i0) << pickPos(32, 0))
+                | (ulong(i1) << pickPos(32, 32));
     }
 
     @AlwaysInline
     private static long makeLong(short i0, short i1, short i2, short i3) {
-        return ((toUnsignedLong(i0) << pickPos(48, 0))
-                | (toUnsignedLong(i1) << pickPos(48, 16))
-                | (toUnsignedLong(i2) << pickPos(48, 32))
-                | (toUnsignedLong(i3) << pickPos(48, 48)));
+        return ((ulong(i0) << pickPos(48, 0))
+                | (ulong(i1) << pickPos(48, 16))
+                | (ulong(i2) << pickPos(48, 32))
+                | (ulong(i3) << pickPos(48, 48)));
     }
 
     @AlwaysInline
     private static long makeLong(byte i0, byte i1, byte i2, byte i3, byte i4, byte i5, byte i6, byte i7) {
-        return ((toUnsignedLong(i0) << pickPos(56, 0))
-                | (toUnsignedLong(i1) << pickPos(56, 8))
-                | (toUnsignedLong(i2) << pickPos(56, 16))
-                | (toUnsignedLong(i3) << pickPos(56, 24))
-                | (toUnsignedLong(i4) << pickPos(56, 32))
-                | (toUnsignedLong(i5) << pickPos(56, 40))
-                | (toUnsignedLong(i6) << pickPos(56, 48))
-                | (toUnsignedLong(i7) << pickPos(56, 56)));
+        return ((ulong(i0) << pickPos(56, 0))
+                | (ulong(i1) << pickPos(56, 8))
+                | (ulong(i2) << pickPos(56, 16))
+                | (ulong(i3) << pickPos(56, 24))
+                | (ulong(i4) << pickPos(56, 32))
+                | (ulong(i5) << pickPos(56, 40))
+                | (ulong(i6) << pickPos(56, 48))
+                | (ulong(i7) << pickPos(56, 56)));
     }
 
     @AlwaysInline
     private static int makeInt(short i0, short i1) {
-        return (toUnsignedInt(i0) << pickPos(16, 0))
-                | (toUnsignedInt(i1) << pickPos(16, 16));
+        return (uint(i0) << pickPos(16, 0))
+                | (uint(i1) << pickPos(16, 16));
     }
 
     @AlwaysInline
     private static int makeInt(byte i0, byte i1, byte i2, byte i3) {
-        return ((toUnsignedInt(i0) << pickPos(24, 0))
-                | (toUnsignedInt(i1) << pickPos(24, 8))
-                | (toUnsignedInt(i2) << pickPos(24, 16))
-                | (toUnsignedInt(i3) << pickPos(24, 24)));
+        return ((uint(i0) << pickPos(24, 0))
+                | (uint(i1) << pickPos(24, 8))
+                | (uint(i2) << pickPos(24, 16))
+                | (uint(i3) << pickPos(24, 24)));
     }
 
     @AlwaysInline
     private static short makeShort(byte i0, byte i1) {
-        return (short) ((toUnsignedInt(i0) << pickPos(8, 0))
-                | (toUnsignedInt(i1) << pickPos(8, 8)));
+        return (short) ((uint(i0) << pickPos(8, 0))
+                | (uint(i1) << pickPos(8, 8)));
     }
 
     @DoNotShrink // TODO: DoNotInline
@@ -723,13 +723,13 @@ public class AndroidUnsafe {
     @AlwaysInline
     public static long getWordUnaligned(Object obj, long offset, boolean swap) {
         return IS64BIT ? getLongUnaligned(obj, offset, swap)
-                : getIntUnaligned(obj, offset, swap) & 0xffffffffL;
+                : ulong(getIntUnaligned(obj, offset, swap));
     }
 
     @AlwaysInline
     public static long getWordUnaligned(Object obj, long offset) {
         return IS64BIT ? getLongUnaligned(obj, offset)
-                : getIntUnaligned(obj, offset) & 0xffffffffL;
+                : ulong(getIntUnaligned(obj, offset));
     }
 
     @AlwaysInline

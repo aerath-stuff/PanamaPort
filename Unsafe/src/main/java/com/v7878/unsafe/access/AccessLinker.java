@@ -2,12 +2,14 @@ package com.v7878.unsafe.access;
 
 import static android.os.Build.VERSION.SDK_INT;
 import static android.os.Build.VERSION.SDK_INT_FULL;
+import static com.v7878.dex.DexConstants.ACC_ABSTRACT;
 import static com.v7878.dex.DexConstants.ACC_FINAL;
 import static com.v7878.dex.DexConstants.ACC_INTERFACE;
 import static com.v7878.dex.DexConstants.ACC_PUBLIC;
 import static com.v7878.dex.builder.CodeBuilder.InvokeKind.DIRECT;
 import static com.v7878.dex.builder.CodeBuilder.InvokeKind.INTERFACE;
 import static com.v7878.dex.builder.CodeBuilder.InvokeKind.STATIC;
+import static com.v7878.dex.builder.CodeBuilder.InvokeKind.SUPER;
 import static com.v7878.dex.builder.CodeBuilder.InvokeKind.VIRTUAL;
 import static com.v7878.unsafe.ArtFieldUtils.makeFieldNonFinal;
 import static com.v7878.unsafe.ArtFieldUtils.makeFieldPublic;
@@ -17,10 +19,12 @@ import static com.v7878.unsafe.ArtVersion.ART_INDEX;
 import static com.v7878.unsafe.ClassUtils.makeClassPublic;
 import static com.v7878.unsafe.DexFileUtils.openDexFile;
 import static com.v7878.unsafe.DexFileUtils.setTrusted;
+import static com.v7878.unsafe.Reflection.getDeclaredMethod;
 import static com.v7878.unsafe.Reflection.getDeclaredMethods;
 import static com.v7878.unsafe.Utils.searchExecutable;
 import static com.v7878.unsafe.Utils.searchField;
 import static com.v7878.unsafe.Utils.shouldNotReachHere;
+import static com.v7878.unsafe.access.AccessLinker.ExecutableAccessKind.DIRECT_AS_SUPER;
 import static com.v7878.unsafe.access.AccessLinker.ExecutableAccessKind.DIRECT_HOOK_VTABLE;
 import static com.v7878.unsafe.access.AccessLinker.ExecutableAccessKind.INIT;
 import static com.v7878.unsafe.access.AccessLinker.ExecutableAccessKind.NEW_INIT;
@@ -52,6 +56,7 @@ import java.lang.annotation.Repeatable;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import java.lang.invoke.MethodType;
 import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -128,11 +133,12 @@ public class AccessLinker {
     }
 
     public enum ExecutableAccessKind {
+        // Common call types
         VIRTUAL, INTERFACE, STATIC,
-        // just call constructor for an existing object or create a new instance first
+        // Just call constructor for an existing object or create a new instance first
         INIT, NEW_INIT,
-        // NOTE: invoke-direct access is impossible except for constructors
-        // TODO: DIRECT_AS_VIRTUAL
+        // Hacks for invoke-direct
+        DIRECT_AS_SUPER,
         DIRECT_HOOK_VTABLE
     }
 
@@ -208,11 +214,15 @@ public class AccessLinker {
     }
 
     private interface Processor {
-        default void apply(ClassBuilder builder) {
+        default void apply_intermediate(ClassBuilder builder, TypeId type) {
             // nop
         }
 
-        default void post(Class<?> impl) {
+        default void post_intermediate(Class<?> impl) {
+            // nop
+        }
+
+        default void apply_main(ClassBuilder builder) {
             // nop
         }
     }
@@ -223,7 +233,7 @@ public class AccessLinker {
         record ClassProcessor(ClassAccessKind kind, TypeId target,
                               String sketch_name, ProtoId sketch_proto) implements Processor {
             @Override
-            public void apply(ClassBuilder cb) {
+            public void apply_main(ClassBuilder cb) {
                 cb.withMethod(mb -> mb
                         .withFlags(ACC_PUBLIC | ACC_FINAL)
                         .withName(sketch_name)
@@ -274,7 +284,7 @@ public class AccessLinker {
         record FieldProcessor(FieldAccessKind kind, FieldId target_id,
                               String sketch_name, ProtoId sketch_proto) implements Processor {
             @Override
-            public void apply(ClassBuilder cb) {
+            public void apply_main(ClassBuilder cb) {
                 cb.withMethod(mb -> mb
                         .withFlags(ACC_PUBLIC | ACC_FINAL)
                         .withName(sketch_name)
@@ -335,7 +345,7 @@ public class AccessLinker {
         record ExecutableProcessor(ExecutableAccessKind kind, MethodId target,
                                    String sketch_name, ProtoId sketch_proto) implements Processor {
             @Override
-            public void apply(ClassBuilder cb) {
+            public void apply_main(ClassBuilder cb) {
                 cb.withMethod(mb -> mb
                         .withFlags(ACC_PUBLIC | ACC_FINAL)
                         .withName(sketch_name)
@@ -346,32 +356,32 @@ public class AccessLinker {
                             var ret_shorty = sketch_proto.getReturnType().getShorty();
                             switch (kind) {
                                 case STATIC -> {
-                                    ib.invoke_range(STATIC, target, ins, ins == 0 ? 0 : ib.p(0));
+                                    ib.invoke_range(STATIC, target, ins == 0 ? 0 : ib.p(0));
                                     ib.move_result_shorty(ret_shorty, ib.l(0));
                                     ib.return_shorty(ret_shorty, ib.l(0));
                                 }
                                 case VIRTUAL -> {
-                                    ib.invoke_range(VIRTUAL, target, ins, ib.p(0));
+                                    ib.invoke_range(VIRTUAL, target, ib.p(0));
                                     ib.move_result_shorty(ret_shorty, ib.l(0));
                                     ib.return_shorty(ret_shorty, ib.l(0));
                                 }
                                 case INTERFACE -> {
-                                    ib.invoke_range(INTERFACE, target, ins, ib.p(0));
+                                    ib.invoke_range(INTERFACE, target, ib.p(0));
                                     ib.move_result_shorty(ret_shorty, ib.l(0));
                                     ib.return_shorty(ret_shorty, ib.l(0));
                                 }
                                 case INIT -> {
                                     assert ret_shorty == 'V';
-                                    ib.invoke_range(DIRECT, target, ins, ib.p(0));
+                                    ib.invoke_range(DIRECT, target, ib.p(0));
                                     ib.return_void();
                                 }
                                 case NEW_INIT -> {
                                     assert ret_shorty == 'L';
                                     ib.new_instance(ib.this_(), target.getDeclaringClass());
-                                    ib.invoke_range(DIRECT, target, ins + 1, ib.this_());
+                                    ib.invoke_range(DIRECT, target, ib.this_());
                                     ib.return_object(ib.this_());
                                 }
-                                case DIRECT_HOOK_VTABLE -> shouldNotReachHere();
+                                case DIRECT_AS_SUPER, DIRECT_HOOK_VTABLE -> shouldNotReachHere();
                             }
                         })
                 );
@@ -388,17 +398,20 @@ public class AccessLinker {
                 name -> ClassUtils.forName(name, loader));
         var target = searchExecutable(cached_executables.computeIfAbsent(target_class,
                 Reflection::getHiddenExecutables), annotation.name(), annotation.args());
-        if (kind != DIRECT_HOOK_VTABLE) {
+        if (kind != DIRECT_HOOK_VTABLE && kind != DIRECT_AS_SUPER) {
             makeExecutablePublic(target);
         }
 
-        var access_shorty = ProtoId.of(target).computeShorty();
-        access_shorty = switch (kind) {
-            case STATIC, DIRECT_HOOK_VTABLE -> access_shorty;
-            case VIRTUAL, INTERFACE, INIT ->
-                    new StringBuilder(access_shorty).insert(1, "L").toString();
-            case NEW_INIT -> "L" + access_shorty.substring(1);
+        var target_id = MethodId.of(target);
+        var target_proto = target_id.getProto();
+        var target_shorty = target_proto.computeShorty();
+        var access_shorty = switch (kind) {
+            case STATIC, DIRECT_HOOK_VTABLE -> target_shorty;
+            case DIRECT_AS_SUPER, VIRTUAL, INTERFACE, INIT ->
+                    new StringBuilder(target_shorty).insert(1, "L").toString();
+            case NEW_INIT -> "L" + target_shorty.substring(1);
         };
+        var sketch_name = sketch.getName();
         var sketch_proto = ProtoId.of(sketch);
         var sketch_shorty = sketch_proto.computeShorty();
         if (!access_shorty.equals(sketch_shorty)) {
@@ -407,8 +420,6 @@ public class AccessLinker {
                     kind, target, access_shorty, sketch_shorty));
         }
         if (kind == DIRECT_HOOK_VTABLE) {
-            checkAbstact(sketch);
-
             var sketch_art = Reflection.getArtMethod(sketch);
             var target_art = Reflection.getArtMethod(target);
 
@@ -416,40 +427,105 @@ public class AccessLinker {
                     0, ArtModifiers.kAccSingleImplementation);
             ArtMethodUtils.setExecutableData(sketch_art, target_art);
 
+            VM.setVTableEntry(sketch.getDeclaringClass(),
+                    getDispatchTableIndex(sketch_art), target_art);
             return new Processor() {
+                // nop
+            };
+        }
+        if (kind == DIRECT_AS_SUPER) {
+            var name = sketch.getName() + "_stub";
+            var mt = MethodType.methodType(
+                    sketch.getReturnType(),
+                    sketch.getParameterTypes()
+            ).dropParameterTypes(0, 1);
+            var proto = ProtoId.of(mt);
+            return new Processor() {
+                TypeId intermediate;
+
                 @Override
-                public void post(Class<?> impl) {
-                    VM.setEmbeddedVTableEntry(impl, getDispatchTableIndex(sketch_art), target_art);
+                public void apply_intermediate(ClassBuilder cb, TypeId type) {
+                    this.intermediate = type;
+                    cb.withMethod(mb -> mb
+                            .withFlags(ACC_PUBLIC | ACC_ABSTRACT)
+                            .withName(name)
+                            .withProto(proto)
+                    );
+                }
+
+                @Override
+                public void apply_main(ClassBuilder cb) {
+                    cb.withMethod(mb -> mb
+                            .withFlags(ACC_PUBLIC | ACC_FINAL)
+                            .withName(sketch_name)
+                            .withProto(sketch_proto)
+                            .withCode(/* wide return */ 2, ib -> {
+                                ib.generate_lines();
+
+                                var ret_shorty = proto.getReturnType().getShorty();
+                                ib.invoke_range(SUPER, MethodId.of(intermediate, name, proto), ib.p(0));
+                                ib.move_result_shorty(ret_shorty, ib.l(0));
+                                ib.return_shorty(ret_shorty, ib.l(0));
+                            })
+                    );
+                }
+
+                @Override
+                public void post_intermediate(Class<?> impl) {
+                    var stub = getDeclaredMethod(impl, name, mt.parameterArray());
+
+                    var stub_art = Reflection.getArtMethod(stub);
+                    var target_art = Reflection.getArtMethod(target);
+
+                    ArtMethodUtils.changeExecutableFlags(stub_art,
+                            0, ArtModifiers.kAccSingleImplementation);
+                    ArtMethodUtils.setExecutableData(stub_art, target_art);
+
+                    VM.setVTableEntry(impl, getDispatchTableIndex(stub_art), target_art);
                 }
             };
         }
-        return new ExecutableProcessor(kind, MethodId.of(target), sketch.getName(), sketch_proto);
+        return new ExecutableProcessor(kind, MethodId.of(target), sketch_name, sketch_proto);
     }
 
     @SuppressWarnings("unchecked")
     public static <T> Class<T> processSymbols(Class<T> clazz, ClassLoader loader, List<Processor> processors) {
-        String access_name = Utils.generateClassName(loader, clazz.getName() + "$Access");
+        String access_name = Utils.generateClassName(loader, clazz.getName() + "$Impl");
         TypeId access_id = TypeId.ofName(access_name);
 
-        ClassDef access_def = ClassBuilder.build(access_id, cb -> {
+        String intermegiate_name = access_name + "$Intermediate";
+        TypeId intermegiate_id = TypeId.ofName(intermegiate_name);
+
+        ClassDef intermegiate_def = ClassBuilder.build(intermegiate_id, cb -> {
             cb.withSuperClass(TypeId.of(clazz));
-            cb.withFlags(ACC_PUBLIC);
+            cb.withFlags(ACC_PUBLIC | ACC_ABSTRACT);
             for (var proc : processors) {
-                proc.apply(cb);
+                proc.apply_intermediate(cb, intermegiate_id);
             }
         });
 
-        DexFile dex = openDexFile(DexIO.write(Dex.of(access_def)));
+        ClassDef access_def = ClassBuilder.build(access_id, cb -> {
+            cb.withSuperClass(intermegiate_id);
+            cb.withFlags(ACC_PUBLIC);
+            for (var proc : processors) {
+                proc.apply_main(cb);
+            }
+        });
+
+        DexFile dex = openDexFile(DexIO.write(Dex.of(intermegiate_def, access_def)));
         setTrusted(dex);
 
-        var out = DexFileUtils.loadClass(dex, access_name, loader);
-        ClassUtils.forceClassVerified(out);
+        var intermegiate = DexFileUtils.loadClass(dex, intermegiate_name, loader);
+        ClassUtils.forceClassVerified(intermegiate);
 
         for (var proc : processors) {
-            proc.post(out);
+            proc.post_intermediate(intermegiate);
         }
 
-        return (Class<T>) out;
+        var impl = DexFileUtils.loadClass(dex, access_name, loader);
+        ClassUtils.forceClassVerified(impl);
+
+        return (Class<T>) impl;
     }
 
     public static <T> Class<T> generateImplClass(Class<T> clazz) {

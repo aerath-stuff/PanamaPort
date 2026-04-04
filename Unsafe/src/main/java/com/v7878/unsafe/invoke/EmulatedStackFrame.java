@@ -3,6 +3,8 @@ package com.v7878.unsafe.invoke;
 import static com.v7878.dex.DexConstants.ACC_FINAL;
 import static com.v7878.dex.DexConstants.ACC_PUBLIC;
 import static com.v7878.dex.builder.CodeBuilder.Op.PUT_OBJECT;
+import static com.v7878.dex.immutable.TypeId.B;
+import static com.v7878.dex.immutable.TypeId.OBJECT;
 import static com.v7878.unsafe.AndroidUnsafe.ARRAY_BYTE_BASE_OFFSET;
 import static com.v7878.unsafe.AndroidUnsafe.allocateInstance;
 import static com.v7878.unsafe.ArtVersion.A13;
@@ -15,6 +17,7 @@ import static com.v7878.unsafe.Utils.shouldNotReachHere;
 import static com.v7878.unsafe.access.AccessLinker.FieldAccessKind.INSTANCE_GETTER;
 import static com.v7878.unsafe.access.AccessLinker.FieldAccessKind.INSTANCE_SETTER;
 import static com.v7878.unsafe.access.InvokeAccess.MT_ID;
+import static com.v7878.unsafe.access.InvokeAccess.rtype;
 
 import com.v7878.dex.DexIO;
 import com.v7878.dex.builder.ClassBuilder;
@@ -86,8 +89,8 @@ public final class EmulatedStackFrame {
 
         var type_id = FieldId.of(esf, "type", MT_ID);
         var callsite_id = FieldId.of(esf, "callsiteType", MT_ID);
-        var references_id = FieldId.of(esf, "references", TypeId.OBJECT.array());
-        var primitives_id = FieldId.of(esf, "stackFrame", TypeId.B.array());
+        var references_id = FieldId.of(esf, "references", OBJECT.array());
+        var primitives_id = FieldId.of(esf, "stackFrame", B.array());
 
         ClassDef access_def = ClassBuilder.build(access_id, cb -> cb
                 .withSuperClass(TypeId.of(partial_impl))
@@ -95,8 +98,8 @@ public final class EmulatedStackFrame {
                 .withMethod(mb -> mb
                         .withFlags(ACC_PUBLIC | ACC_FINAL)
                         .withName("create")
-                        .withReturnType(TypeId.OBJECT)
-                        .withParameterTypes(MT_ID, TypeId.OBJECT.array(), TypeId.B.array())
+                        .withReturnType(OBJECT)
+                        .withParameterTypes(MT_ID, OBJECT.array(), B.array())
                         .withCode(0, ib -> {
                             ib.generate_lines();
                             ib.new_instance(ib.this_(), esf);
@@ -138,7 +141,7 @@ public final class EmulatedStackFrame {
     }
 
     @AlwaysInline
-    private static char checkAssignable(char expected, char actual) {
+    private static char checkSame(char expected, char actual) {
         if (expected == actual) {
             return expected;
         }
@@ -244,7 +247,7 @@ public final class EmulatedStackFrame {
 
     public static void copyNextValue(RelativeStackFrameAccessor reader,
                                      RelativeStackFrameAccessor writer) {
-        switch (checkAssignable(reader.currentShorty(), writer.currentShorty())) {
+        switch (checkSame(reader.currentShorty(), writer.currentShorty())) {
             case 'V' -> { /* nop */ }
             case 'L' -> writer.putNextRSLOT(reader.getNextRSLOT());
             case 'Z', 'B', 'C', 'S', 'I', 'F' -> writer.putNextSSLOT(reader.getNextSSLOT());
@@ -255,7 +258,7 @@ public final class EmulatedStackFrame {
 
     public static void copyValue(StackFrameAccessor reader, int reader_idx,
                                  StackFrameAccessor writer, int writer_idx) {
-        switch (checkAssignable(reader.getArgumentShorty(reader_idx),
+        switch (checkSame(reader.getArgumentShorty(reader_idx),
                 writer.getArgumentShorty(writer_idx))) {
             case 'V' -> { /* nop */ }
             case 'L' -> writer.putRSLOT(writer_idx, reader.getRSLOT(reader_idx));
@@ -338,13 +341,20 @@ public final class EmulatedStackFrame {
         }
 
         @AlwaysInline
+        public Class<?> getArgumentType(int index) {
+            checkIndex(index);
+            var type = frame.type();
+            return index == RETURN_VALUE_IDX ? rtype(type) : type.parameterType(index);
+        }
+
+        @AlwaysInline
         private void checkWriteType(int index, char expected) {
-            checkAssignable(getArgumentShorty(index), expected);
+            checkSame(getArgumentShorty(index), expected);
         }
 
         @AlwaysInline
         private void checkReadType(int index, char expected) {
-            checkAssignable(expected, getArgumentShorty(index));
+            checkSame(expected, getArgumentShorty(index));
         }
 
         @AlwaysInline
@@ -570,12 +580,12 @@ public final class EmulatedStackFrame {
 
         @AlwaysInline
         private void checkWriteType(char expected) {
-            checkAssignable(currentShorty(), expected);
+            checkSame(currentShorty(), expected);
         }
 
         @AlwaysInline
         private void checkReadType(char expected) {
-            checkAssignable(expected, currentShorty());
+            checkSame(expected, currentShorty());
         }
 
         public RelativeStackFrameAccessor moveTo(int index) {
