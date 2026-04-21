@@ -77,18 +77,18 @@ public class LibDL {
             MMapEntry linker = Maps.findFirstByPath("/\\S+/" + linker_name);
             SymTab symbols = ELF.readSymTab(linker.path(), ART_INDEX >= A9);
 
-            s_dladdr = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dladdrPKvP7Dl_info" : "__loader_dladdr", linker.start());
-            s_dlclose = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z9__dlclosePv" : "__loader_dlclose", linker.start());
-            s_dlerror = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z9__dlerrorv" : "__loader_dlerror", linker.start());
-            s_dlopen = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dlopenPKciPKv" : "__loader_dlopen", linker.start());
-            s_dlvsym = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dlvsymPvPKcS1_PKv" : "__loader_dlvsym", linker.start());
+            s_dladdr = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dladdrPKvP7Dl_info" : "__loader_dladdr", linker.getStart());
+            s_dlclose = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z9__dlclosePv" : "__loader_dlclose", linker.getStart());
+            s_dlerror = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z9__dlerrorv" : "__loader_dlerror", linker.getStart());
+            s_dlopen = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dlopenPKciPKv" : "__loader_dlopen", linker.getStart());
+            s_dlvsym = symbols.findFunction(ART_INDEX < A9 ? "__dl__Z8__dlvsymPvPKcS1_PKv" : "__loader_dlvsym", linker.getStart());
 
             s_android_create_namespace = symbols.findFunction(ART_INDEX < A9 ?
                     "__dl__Z26__android_create_namespacePKcS0_S0_yS0_P19android_namespace_tPKv" :
-                    "__loader_android_create_namespace", linker.start());
+                    "__loader_android_create_namespace", linker.getStart());
             s_android_dlopen_ext = symbols.findFunction(ART_INDEX < A9 ?
                     "__dl__Z20__android_dlopen_extPKciPK17android_dlextinfoPKv" :
-                    "__loader_android_dlopen_ext", linker.start());
+                    "__loader_android_dlopen_ext", linker.getStart());
         }
     }
 
