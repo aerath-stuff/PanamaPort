@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -86,6 +87,12 @@ public class Maps {
             return maps.filter(entry -> entry.path() != null
                             && pattern.matcher(entry.path()).matches())
                     .findFirst().orElse(null);
+        }
+    }
+
+    public static MMapEntry findFirst(Predicate<MMapEntry> test) {
+        try (var maps = maps("self")) {
+            return maps.filter(test).findFirst().orElse(null);
         }
     }
 }
