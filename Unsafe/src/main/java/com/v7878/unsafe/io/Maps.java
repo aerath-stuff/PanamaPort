@@ -4,8 +4,13 @@ import static com.v7878.unsafe.Utils.shouldNotHappen;
 
 import android.os.Build;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.math.BigInteger;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.function.Predicate;
@@ -13,6 +18,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 public class Maps {
+    private static final CharsetDecoder mapsDecoder = StandardCharsets.UTF_8.newDecoder()
+            .onMalformedInput(CodingErrorAction.REPLACE)
+            .onUnmappableCharacter(CodingErrorAction.REPLACE);
+
     public record MMapEntry(BigInteger start, BigInteger end, String perms,
                             BigInteger offset, int dev_major, int dev_minor,
                             BigInteger inode, String path) {
@@ -45,8 +54,17 @@ public class Maps {
         var file = Paths.get((String.format("/proc/%s/maps", pid)));
 
         try {
-            //noinspection resource
-            return Files.lines(file).map(line -> {
+            var fis = Files.newInputStream(file);
+            var isr = new InputStreamReader(fis, mapsDecoder);
+            var br = new BufferedReader(isr);
+
+            return br.lines().onClose(() -> {
+                try {
+                    br.close();
+                } catch (IOException e) {
+                    throw shouldNotHappen(e);
+                }
+            }).map(line -> {
                 var parts = line.split(" ", 6);
                 assert parts.length >= 5;
 
