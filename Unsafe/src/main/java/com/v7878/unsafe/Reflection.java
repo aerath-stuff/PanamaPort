@@ -79,34 +79,38 @@ public class Reflection {
             var long_index = (art_field - fields_ - ART_FIELD_PADDING) / ART_FIELD_SIZE;
             var index = Math.toIntExact(long_index);
 
+            var dex_file = DexFileUtils.getDexFileStruct(declaring_class);
+            var loader = declaring_class.getClassLoader();
+
             var access_flags = getIntN(art_field + 4);
             var dex_idx = getIntN(art_field + 8);
             var offset = getIntN(art_field + 12);
-            var dex_class_def_idx = AndroidUnsafe.getIntO(declaring_class, 80);
-            var dex_file = DexFileUtils.getDexFileStruct(declaring_class);
-            var loader = declaring_class.getClassLoader();
             var declaring_type = TypeId.of(declaring_class);
 
-            Class<?> type = resolveType(dex_file, dex_class_def_idx + index, loader, declaring_type);
-            if (type == null) type = resolveType(dex_file, dex_idx, loader, declaring_type);
-            if (type == null)
-                throw new NoClassDefFoundError(
-                        "Cannot resolve field type for " + declaring_class.getName() + " index " + index);
+            Class<?> type = resolveType(dex_file, dex_idx, loader, declaring_type);
+
+            if (type == null) {
+                var dex_class_def_idx = AndroidUnsafe.getIntO(declaring_class, 80);
+                type = resolveType(dex_file,
+                        dex_class_def_idx + index, loader, declaring_type);
+            }
+
+            if (type == null) {
+                throw new NoClassDefFoundError("Cannot resolve field type for " +
+                        declaring_class.getName() + " index " + index);
+            }
 
             return newInstance(declaring_class, type, access_flags, index, offset);
         }
 
         private static Class<?> resolveType(long dex_file, int field_id_index,
                                             ClassLoader loader, TypeId declaring_type) {
-            try {
-                var fid = NanoDexParser.getFieldId(dex_file, field_id_index);
-                if (!fid.getDeclaringClass().equals(declaring_type)) {
-                    return null;
-                }
+            var fid = NanoDexParser.getFieldId(dex_file, field_id_index);
+            if (fid.getDeclaringClass().equals(declaring_type)) {
                 return ClassUtils.forType(fid.getType(), loader);
-            } catch (Throwable e) {
-                return null;
             }
+
+            return null;
         }
     }
 
