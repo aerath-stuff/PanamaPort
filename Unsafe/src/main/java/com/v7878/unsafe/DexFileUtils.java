@@ -206,22 +206,22 @@ public class DexFileUtils {
         class Holder {
             static final long DEX_FILE_OFFSET = 16;
             static final long DEX_FILE_OFFSET_ALT = 56;
+
+            static boolean isNotValidArtPtr(long address) {
+                long top = address & 0xFFFF000000000000L;
+                return top != 0xb400000000000000L && top != 0x7b00000000000000L;
+            }
         }
         Object dexCache = Objects.requireNonNull(getDexCache(clazz));
-        long address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET_ALT);
+        long address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET);
 
-        if (isNotValidPtr(address))
-            address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET);
+        if (Holder.isNotValidArtPtr(address))
+            address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET_ALT);
 
-        if (isNotValidPtr(address))
+        if (Holder.isNotValidArtPtr(address))
             throw new IllegalStateException("dexFile == 0");
 
         return address;
-    }
-
-    private static boolean isNotValidPtr(long address) {
-        long top = address & 0xFFFF000000000000L;
-        return top != 0xb400000000000000L && top != 0x7b00000000000000L;
     }
 
     public static MemorySegment getDexFileStructSegment(Class<?> clazz) {
