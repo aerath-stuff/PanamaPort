@@ -72,7 +72,6 @@ public class Transformers {
 
     private static final MethodHandle new_transformer;
     private static final InvokerI INVOKER;
-    private static boolean hasAsTypeCache = false;
 
     static {
         Class<?> invoke_transformer = ClassUtils.sysClass(
@@ -90,7 +89,14 @@ public class Transformers {
         FieldId impl_field = FieldId.of(transformer_id,
                 "impl", transformer_impl_id);
 
-        FieldId asTypeCache = fillAsTypeCache(transformer_id);
+        FieldId asTypeCache;
+        if (ART_INDEX < A13) {
+            asTypeCache = FieldId.of(transformer_id, "asTypeCache", MH_ID);
+        } else {
+            Field cache = getHiddenInstanceField(MethodHandle.class, "asTypeCache");
+            makeFieldPublic(cache);
+            asTypeCache = FieldId.of(cache);
+        }
 
         // public final class Transformer extends j.l.i.Transformer implements Cloneable {
         //     <...>
@@ -228,7 +234,7 @@ public class Transformers {
                                 .return_object(ib.l(0))
                         )
                 )
-                .if_(!hasAsTypeCache, cb2 -> cb2
+                .if_(ART_INDEX < A13, cb2 -> cb2
                         .withField(fb -> fb
                                 .of(asTypeCache)
                                 .withFlags(ACC_PRIVATE)
@@ -238,7 +244,7 @@ public class Transformers {
                     MethodId asTypeUncached = MethodId.of(transformer_id,
                             "asTypeUncached", MH_ID, MT_ID);
                     Consumer<CodeBuilder> fallbackAsType;
-                    if (!hasAsTypeCache) {
+                    if (ART_INDEX < A13) {
                         if (ART_INDEX < A10) {
                             // return asTypeCache = super.asType(type);
                             fallbackAsType = ib -> ib
@@ -454,17 +460,6 @@ public class Transformers {
         Class<?> transformer = loadClass(dex, transformer_name, loader);
         new_transformer = unreflect(getDeclaredConstructor(transformer,
                 MethodType.class, int.class, TransformerImpl.class));
-    }
-
-    private static FieldId fillAsTypeCache(TypeId transformer_id) {
-        try {
-            Field cache = getHiddenInstanceField(MethodHandle.class, "asTypeCache");
-            makeFieldPublic(cache);
-            hasAsTypeCache = true;
-            return FieldId.of(cache);
-        } catch (Throwable ignored) {
-            return FieldId.of(transformer_id, "asTypeCache", MH_ID);
-        }
     }
 
     @ApiSensitive

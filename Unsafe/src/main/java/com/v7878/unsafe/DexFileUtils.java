@@ -205,47 +205,13 @@ public class DexFileUtils {
     public static long getDexFileStruct(Class<?> clazz) {
         class Holder {
             static final long DEX_FILE_OFFSET = 16;
-            static final long DEX_FILE_OFFSET_QPR3 = 56;
-
-            static final int DEX_MAGIC = 0x0a786564; // "dex\n"
-            static final int CDEX_MAGIC = 0x78656463; // "cdex"
-            static final int DEX_ENDIAN_TAG = 0x12345678;
-            static final int DEX_HEADER_SIZE = 0x70;
-            static final long DEXFILE_HEADER_OFFSET = 0x48;
-
-            private static long untag(long p) {
-                return p & 0x00FFFFFFFFFFFFFFL;
-            }
-
-            /** 64-bit user pointer (< 2^48) but the top-byte tag is ignored */
-            static boolean isNotUserPtr(long u) {
-                return u < 0x1000 || (u >>> 48) != 0;
-            }
-
-            static boolean isValidDexFilePtr(long p) {
-                long u = untag(p);
-                if (isNotUserPtr(u) || (u & 7) != 0) return false;
-
-                long header = AndroidUnsafe.getLongN(p + DEXFILE_HEADER_OFFSET);
-                long hu = untag(header);
-                if (isNotUserPtr(hu) || (hu & 3) != 0) return false;
-
-                int magic = AndroidUnsafe.getIntN(header);
-                if (magic == DEX_MAGIC) {
-                    return AndroidUnsafe.getIntN(header + 0x24) == DEX_HEADER_SIZE
-                            && AndroidUnsafe.getIntN(header + 0x28) == DEX_ENDIAN_TAG;
-                }
-                return magic == CDEX_MAGIC;
-            }
         }
         Object dexCache = Objects.requireNonNull(getDexCache(clazz));
-        long address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET_QPR3);
-        if (Holder.isValidDexFilePtr(address)) return address;
-
-        address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET);
-        if (Holder.isValidDexFilePtr(address)) return address;
-
-        throw new IllegalStateException("dexFile == 0");
+        long address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET);
+        if (address == 0) {
+            throw new IllegalStateException("dexFile == 0");
+        }
+        return address;
     }
 
     public static MemorySegment getDexFileStructSegment(Class<?> clazz) {
