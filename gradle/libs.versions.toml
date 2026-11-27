@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.2"
+agp = "9.5.3"
 maven-publish = "0.37.0"
 
 dexfile = "v1.6.1"
