@@ -4,7 +4,6 @@ import static com.v7878.unsafe.AndroidUnsafe.ADDRESS_SIZE;
 import static com.v7878.unsafe.AndroidUnsafe.ARRAY_INT_BASE_OFFSET;
 import static com.v7878.unsafe.AndroidUnsafe.ARRAY_OBJECT_BASE_OFFSET;
 import static com.v7878.unsafe.AndroidUnsafe.ARRAY_OBJECT_INDEX_SCALE;
-import static com.v7878.unsafe.AndroidUnsafe.IS64BIT;
 import static com.v7878.unsafe.AndroidUnsafe.arrayBaseOffset;
 import static com.v7878.unsafe.AndroidUnsafe.arrayIndexScale;
 import static com.v7878.unsafe.AndroidUnsafe.getInt;
@@ -261,7 +260,7 @@ public class VM {
 
     public static long getVTableEntry(Class<?> clazz, int index) {
         var vtable = getVTable(clazz);
-        if (IS64BIT) {
+        if (vtable instanceof long[]) {
             return ((long[]) vtable)[index];
         } else {
             return ulong(((int[]) vtable)[index]);
@@ -271,7 +270,7 @@ public class VM {
     @DangerLevel(DangerLevel.VERY_CAREFUL)
     public static void setVTableEntry(Class<?> clazz, int index, long art_method) {
         var vtable = getVTable(clazz);
-        if (IS64BIT) {
+        if (vtable instanceof long[]) {
             ((long[]) vtable)[index] = art_method;
         } else {
             ((int[]) vtable)[index] = (int) art_method;
