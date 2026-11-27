@@ -499,7 +499,7 @@ public class AccessLinker {
         TypeId intermegiate_id = TypeId.ofName(intermegiate_name);
 
         ClassDef intermegiate_def = ClassBuilder.build(intermegiate_id, cb -> {
-            cb.withSuperClass(TypeId.of(clazz));
+            cb.withSuperclass(TypeId.of(clazz));
             cb.withFlags(ACC_PUBLIC | ACC_ABSTRACT);
             for (var proc : processors) {
                 proc.apply_intermediate(cb, intermegiate_id);
@@ -507,7 +507,7 @@ public class AccessLinker {
         });
 
         ClassDef access_def = ClassBuilder.build(access_id, cb -> {
-            cb.withSuperClass(intermegiate_id);
+            cb.withSuperclass(intermegiate_id);
             cb.withFlags(ACC_PUBLIC);
             for (var proc : processors) {
                 proc.apply_main(cb);

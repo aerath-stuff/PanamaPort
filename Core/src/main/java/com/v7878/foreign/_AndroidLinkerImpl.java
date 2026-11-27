@@ -643,7 +643,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 .invoke(STATIC, close_arena_id, ib.l(arena_reg));
 
         ClassDef stub_def = ClassBuilder.build(stub_id, cb -> cb
-                .withSuperClass(OBJECT)
+                .withSuperclass(OBJECT)
                 .withField(fb -> fb
                         .of(scope_id)
                         .withFlags(ACC_PRIVATE | ACC_STATIC)
@@ -1240,7 +1240,7 @@ final class _AndroidLinkerImpl extends _AbstractAndroidLinker {
                 .throw_(ib.l(exception_reg));
 
         ClassDef stub_def = ClassBuilder.build(stub_id, cb -> cb
-                .withSuperClass(OBJECT)
+                .withSuperclass(OBJECT)
                 .withMethod(mb -> mb
                         .withFlags(ACC_PRIVATE | ACC_STATIC)
                         .withName(method_name)

@@ -93,7 +93,7 @@ public final class EmulatedStackFrame {
         var primitives_id = FieldId.of(esf, "stackFrame", B.array());
 
         ClassDef access_def = ClassBuilder.build(access_id, cb -> cb
-                .withSuperClass(TypeId.of(partial_impl))
+                .withSuperclass(TypeId.of(partial_impl))
                 .withFlags(ACC_PUBLIC | ACC_FINAL)
                 .withMethod(mb -> mb
                         .withFlags(ACC_PUBLIC | ACC_FINAL)

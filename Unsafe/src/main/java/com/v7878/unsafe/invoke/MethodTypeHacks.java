@@ -66,7 +66,7 @@ public class MethodTypeHacks {
         FieldId rs_field = FieldId.of(form_id, "rshorty", str);
 
         ClassDef form_def = ClassBuilder.build(form_id, cb -> cb
-                .withSuperClass(TypeId.of(INVOKE_FORM))
+                .withSuperclass(TypeId.of(INVOKE_FORM))
                 .withInterfaces(mtf)
                 .withFlags(ACC_PUBLIC | ACC_FINAL)
                 .withField(fb -> fb

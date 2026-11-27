@@ -102,7 +102,7 @@ public class Transformers {
         //     <...>
         // }
         ClassDef transformer_def = ClassBuilder.build(transformer_id, cb -> cb
-                .withSuperClass(invoke_transformer_id)
+                .withSuperclass(invoke_transformer_id)
                 .withInterfaces(TypeId.of(Cloneable.class))
                 .withFlags(ACC_PUBLIC | ACC_FINAL)
                 // private final TransformerImpl impl;
@@ -355,7 +355,7 @@ public class Transformers {
         //     <...>
         // }
         ClassDef invoker_def = ClassBuilder.build(invoker_id, cb -> cb
-                .withSuperClass(TypeId.of(InvokerI.class))
+                .withSuperclass(TypeId.of(InvokerI.class))
                 .withFlags(ACC_PUBLIC | ACC_FINAL)
                 // public boolean isTransformer(MethodHandle handle) {
                 //     return handle instanceof Transformer;
