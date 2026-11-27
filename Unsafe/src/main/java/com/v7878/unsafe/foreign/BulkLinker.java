@@ -261,7 +261,7 @@ public class BulkLinker {
     private static byte[] generateJavaStub(Class<?> parent, String impl_name, SymbolInfo[] infos) {
         TypeId impl_id = TypeId.ofName(impl_name);
         ClassDef impl_def = ClassBuilder.build(impl_id, cb -> cb
-                .withSuperClass(TypeId.of(parent))
+                .withSuperclass(TypeId.of(parent))
                 .withFlags(ACC_PUBLIC)
                 .commit(cb2 -> {
                     for (SymbolInfo info : infos) {

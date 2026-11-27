@@ -317,7 +317,7 @@ public class AccessLinker {
         var target_class = cached_classes.computeIfAbsent(annotation.klass(),
                 name -> ClassUtils.forName(name, loader));
         var target = searchField(cached_fields.computeIfAbsent(
-                target_class, Reflection::getHiddenFields), annotation.name());
+                target_class, Reflection::getDeclaredFields), annotation.name());
         makeFieldPublic(target);
         makeClassPublic(target.getDeclaringClass());
         if (kind == INSTANCE_SETTER || kind == STATIC_SETTER) {
@@ -398,7 +398,7 @@ public class AccessLinker {
         Class<?> target_class = cached_classes.computeIfAbsent(annotation.klass(),
                 name -> ClassUtils.forName(name, loader));
         var target = searchExecutable(cached_executables.computeIfAbsent(target_class,
-                Reflection::getHiddenExecutables), annotation.name(), annotation.args());
+                Reflection::getDeclaredExecutables), annotation.name(), annotation.args());
         if (kind != DIRECT_HOOK_VTABLE && kind != DIRECT_AS_SUPER) {
             makeClassPublic(target.getDeclaringClass());
             makeExecutablePublic(target);
@@ -499,7 +499,7 @@ public class AccessLinker {
         TypeId intermegiate_id = TypeId.ofName(intermegiate_name);
 
         ClassDef intermegiate_def = ClassBuilder.build(intermegiate_id, cb -> {
-            cb.withSuperClass(TypeId.of(clazz));
+            cb.withSuperclass(TypeId.of(clazz));
             cb.withFlags(ACC_PUBLIC | ACC_ABSTRACT);
             for (var proc : processors) {
                 proc.apply_intermediate(cb, intermegiate_id);
@@ -507,7 +507,7 @@ public class AccessLinker {
         });
 
         ClassDef access_def = ClassBuilder.build(access_id, cb -> {
-            cb.withSuperClass(intermegiate_id);
+            cb.withSuperclass(intermegiate_id);
             cb.withFlags(ACC_PUBLIC);
             for (var proc : processors) {
                 proc.apply_main(cb);

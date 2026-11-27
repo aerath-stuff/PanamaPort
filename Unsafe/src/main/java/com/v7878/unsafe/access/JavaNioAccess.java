@@ -209,7 +209,7 @@ public class JavaNioAccess {
         FieldId obo = FieldId.of(mem_ref_id, "originalBufferObject", OBJECT);
 
         ClassDef mem_def = ClassBuilder.build(mem_ref_id, cb -> cb
-                .withSuperClass(nio_mem_ref_id)
+                .withSuperclass(nio_mem_ref_id)
                 .withFlags(ACC_PUBLIC)
                 .if_(ART_INDEX == A8p0, cb2 -> cb2
                         // public final Object originalBufferObject;
@@ -243,7 +243,7 @@ public class JavaNioAccess {
         );
 
         ClassDef direct_buf_def = ClassBuilder.build(direct_buf_id, cb -> cb
-                .withSuperClass(nio_direct_buf_id)
+                .withSuperclass(nio_direct_buf_id)
                 .withFlags(ACC_PUBLIC | ACC_ABSTRACT)
                 // public DirectByteBuffer($args$) {
                 //     super($args$);
@@ -281,7 +281,7 @@ public class JavaNioAccess {
         );
 
         ClassDef heap_buf_def = ClassBuilder.build(heap_buf_id, cb -> cb
-                .withSuperClass(nio_heap_buf_id)
+                .withSuperclass(nio_heap_buf_id)
                 .withFlags(ACC_PUBLIC)
                 // public HeapByteBuffer($args$) {
                 //     super($args$);
@@ -326,12 +326,12 @@ public class JavaNioAccess {
         TypeId socket_channel_id = TypeId.ofName(socket_channel_name);
 
         ClassDef file_channel_def = ClassBuilder.build(file_channel_id, cb -> cb
-                .withSuperClass(nio_file_channel_id)
+                .withSuperclass(nio_file_channel_id)
                 .withFlags(ACC_PUBLIC)
         );
 
         ClassDef socket_channel_def = ClassBuilder.build(socket_channel_id, cb -> cb
-                .withSuperClass(nio_socket_channel_id)
+                .withSuperclass(nio_socket_channel_id)
                 .withFlags(ACC_PUBLIC)
         );
 

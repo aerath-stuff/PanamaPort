@@ -1,13 +1,15 @@
 ## About
 
-`PanamaPort` is a library implementing the [Foreign Function & Memory API](https://openjdk.org/jeps/454) for Android 8.0+ (API level 26)
+`PanamaPort` is a library implementing
+the [Foreign Function & Memory API](https://openjdk.org/jeps/454) for Android 8.0+ (API level 26)
 
 ### Components
 
 This project contains 4 sublibraries:
 
 - Core - the entire public API and implementation of the Panama project
-- Unsafe - low-level implementation details and additional capabilities not provided by the original API
+- Unsafe - low-level implementation details and additional capabilities not provided by the original
+  API
 - LLVM - bindings to the built-in libLLVM.so Android library
 - VarHandles - backport of java.lang.invoke.VarHandle which didn't exist in android 8.x
 
@@ -18,8 +20,8 @@ This project contains 4 sublibraries:
 - Android Gradle plugin 9.1.1+
 - compileSdk 37+
 
-Using versions lower than those listed may cause compilation and runtime issues.
-Older versions of R8/D8 have known bugs that prevent the library from working properly
+Using versions lower than those listed may cause compilation and runtime issues. Older versions of
+R8/D8 have known bugs that prevent the library from working properly
 
 ### Get started
 
@@ -39,15 +41,17 @@ PanamaPort implements full Foreign Function & Memory API support, including:
 
 - Downcall handles - allows Java code to call foreign functions
 - Upcall stubs - allows foreign functions to call Java method handles
-- Linker options such as captureCallState("errno") and even critical(allowHeapAccess: true)
+- Linker options such as captureCallState ("errno") and even critical (allowHeapAccess: true)
 - Access to native memory via VarHandles
 - Management of memory segments via Arenas
 - And much more
 
 ### Differences from the original API
 
-- Package java.lang.foreign moved to com.v7878.foreign package because it is a port and not part of the Java core library
-- WrongThreadException class is also in the com.v7878.foreign package because it doesn't exist on android
+- Package java.lang.foreign moved to com.v7878.foreign package because it is a port and not part of
+  the Java core library
+- WrongThreadException class is also in the com.v7878.foreign package because it doesn't exist on
+  android
 - My implementation of VarHandle is used instead of java.lang.invoke.VarHandle
 
 ### What was added
@@ -71,8 +75,10 @@ Port of methods outside the java.lang.foreign package:
 
 ### Interaction with jextract
 
-Usually, to use the output of jextract, it is enough to fix package names. If something doesn't work properly, please create an issue
+Usually, to use the output of jextract, it is enough to fix package names. If something doesn't work
+properly, please create an issue
 
 ### Examples and tests
 
-Examples are available in [this](https://github.com/vova7878/PanamaExamples) repository. The same repository is where tests are ported from the OpenJ9 and Hotspot implementations
+Examples are available in [this](https://github.com/vova7878/PanamaExamples) repository. The same
+repository is where tests are ported from the OpenJ9 and Hotspot implementations

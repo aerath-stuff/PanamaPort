@@ -1,6 +1,5 @@
 package com.v7878.unsafe;
 
-import static com.v7878.foreign.MemoryLayout.PathElement.groupElement;
 import static com.v7878.foreign.MemoryLayout.paddedStructLayout;
 import static com.v7878.foreign.ValueLayout.ADDRESS;
 import static com.v7878.foreign.ValueLayout.JAVA_BOOLEAN;
@@ -196,22 +195,11 @@ public class DexFileUtils {
     };
 
     public static Object getDexCache(Class<?> clazz) {
-        class Holder {
-            static final long DEX_CACHE_OFFSET = 16;
-        }
-        return AndroidUnsafe.getObject(Objects.requireNonNull(clazz), Holder.DEX_CACHE_OFFSET);
+        return EarlyReflection.getDexCache(clazz);
     }
 
     public static long getDexFileStruct(Class<?> clazz) {
-        class Holder {
-            static final long DEX_FILE_OFFSET = 16;
-        }
-        Object dexCache = Objects.requireNonNull(getDexCache(clazz));
-        long address = AndroidUnsafe.getLongO(dexCache, Holder.DEX_FILE_OFFSET);
-        if (address == 0) {
-            throw new IllegalStateException("dexFile == 0");
-        }
-        return address;
+        return EarlyReflection.getDexFile(clazz);
     }
 
     public static MemorySegment getDexFileStructSegment(Class<?> clazz) {
@@ -258,32 +246,12 @@ public class DexFileUtils {
         AndroidUnsafe.putObject(Objects.requireNonNull(dex), Holder.COOKIE_OFFSET, cookie);
     }
 
-    @ApiSensitive
     public static void setTrusted(long dexfile_struct) {
-        if (ART_INDEX < A9) {
-            return;
-        }
-        class Holder {
-            static final long offset;
+        EarlyReflection.setTrusted(dexfile_struct);
+    }
 
-            static {
-                if (ART_INDEX == A9) {
-                    offset = DEXFILE_LAYOUT.byteOffset(groupElement("is_platform_dex_"));
-                } else {
-                    offset = DEXFILE_LAYOUT.byteOffset(groupElement("hiddenapi_domain_"));
-                }
-            }
-        }
-        if (ART_INDEX == A9) {
-            AndroidUnsafe.putBooleanN(dexfile_struct + Holder.offset, true);
-            return;
-        }
-        final int kCorePlatform = 0;
-        if (ART_INDEX == A10) {
-            AndroidUnsafe.putIntN(dexfile_struct + Holder.offset, kCorePlatform);
-            return;
-        }
-        AndroidUnsafe.putByteN(dexfile_struct + Holder.offset, (byte) kCorePlatform);
+    public static void setTrusted(Class<?> clazz) {
+        EarlyReflection.setTrusted(clazz);
     }
 
     @ApiSensitive
@@ -296,13 +264,6 @@ public class DexFileUtils {
         for (int i = start; i < cookie.length; i++) {
             setTrusted(cookie[i]);
         }
-    }
-
-    public static void setTrusted(Class<?> clazz) {
-        if (ART_INDEX < A9) {
-            return;
-        }
-        setTrusted(getDexFileStruct(clazz));
     }
 
     public static Class<?> loadClass(DexFile dex, String name, ClassLoader loader) {
