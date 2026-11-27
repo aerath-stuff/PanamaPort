@@ -89,14 +89,8 @@ public class Transformers {
         FieldId impl_field = FieldId.of(transformer_id,
                 "impl", transformer_impl_id);
 
-        FieldId asTypeCache;
-        if (ART_INDEX < A13) {
-            asTypeCache = FieldId.of(transformer_id, "asTypeCache", MH_ID);
-        } else {
-            Field cache = getDeclaredInstanceField(MethodHandle.class, "asTypeCache");
-            makeFieldPublic(cache);
-            asTypeCache = FieldId.of(cache);
-        }
+        var asTypeCache = fillAsTypeCache(transformer_id);
+        var builtinAsTypeCache = !transformer_id.equals(asTypeCache.getDeclaringClass());
 
         // public final class Transformer extends j.l.i.Transformer implements Cloneable {
         //     <...>
@@ -244,7 +238,17 @@ public class Transformers {
                     MethodId asTypeUncached = MethodId.of(transformer_id,
                             "asTypeUncached", MH_ID, MT_ID);
                     Consumer<CodeBuilder> fallbackAsType;
-                    if (ART_INDEX < A13) {
+                    if (builtinAsTypeCache) {
+                        Method uncached = getDeclaredMethod(MethodHandle.class,
+                                "asTypeUncached", MethodType.class);
+                        makeMethodInheritable(uncached);
+
+                        // return super.asTypeUncached(type);
+                        fallbackAsType = ib -> ib
+                                .invoke(SUPER, MethodId.of(uncached), ib.this_(), ib.p(0))
+                                .move_result_object(ib.l(0))
+                                .return_object(ib.l(0));
+                    } else {
                         if (ART_INDEX < A10) {
                             // return asTypeCache = super.asType(type);
                             fallbackAsType = ib -> ib
@@ -310,16 +314,6 @@ public class Transformers {
                                         .return_object(ib.l(0))
                                 )
                         );
-                    } else {
-                        Method uncached = getDeclaredMethod(MethodHandle.class,
-                                "asTypeUncached", MethodType.class);
-                        makeMethodInheritable(uncached);
-
-                        // return super.asTypeUncached(type);
-                        fallbackAsType = ib -> ib
-                                .invoke(SUPER, MethodId.of(uncached), ib.this_(), ib.p(0))
-                                .move_result_object(ib.l(0))
-                                .return_object(ib.l(0));
                     }
                     // public MethodHandle asTypeUncached(MethodType type) {
                     //     MethodHandle tmp = impl.asType(this, type);
@@ -460,6 +454,16 @@ public class Transformers {
         Class<?> transformer = loadClass(dex, transformer_name, loader);
         new_transformer = unreflect(getDeclaredConstructor(transformer,
                 MethodType.class, int.class, TransformerImpl.class));
+    }
+
+    private static FieldId fillAsTypeCache(TypeId transformer_id) {
+        try {
+            Field cache = getDeclaredInstanceField(MethodHandle.class, "asTypeCache");
+            makeFieldPublic(cache);
+            return FieldId.of(cache);
+        } catch (Throwable ignored) {
+            return FieldId.of(transformer_id, "asTypeCache", MH_ID);
+        }
     }
 
     @ApiSensitive
