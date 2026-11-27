@@ -12,7 +12,7 @@ import static com.v7878.unsafe.ArtVersion.ART_INDEX;
 import static com.v7878.unsafe.DexFileUtils.loadClass;
 import static com.v7878.unsafe.DexFileUtils.openDexFile;
 import static com.v7878.unsafe.DexFileUtils.setTrusted;
-import static com.v7878.unsafe.Reflection.getHiddenInstanceFields;
+import static com.v7878.unsafe.Reflection.getDeclaredInstanceFields;
 import static com.v7878.unsafe.Utils.shouldNotReachHere;
 import static com.v7878.unsafe.access.AccessLinker.FieldAccessKind.INSTANCE_GETTER;
 import static com.v7878.unsafe.access.AccessLinker.FieldAccessKind.INSTANCE_SETTER;
@@ -75,7 +75,7 @@ public final class EmulatedStackFrame {
     }
 
     static {
-        for (var field : getHiddenInstanceFields(ESF_CLASS)) {
+        for (var field : getDeclaredInstanceFields(ESF_CLASS)) {
             ArtFieldUtils.makeFieldPublic(field);
             ArtFieldUtils.makeFieldNonFinal(field);
         }

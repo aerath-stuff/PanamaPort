@@ -1,6 +1,5 @@
 package com.v7878.unsafe;
 
-import static com.v7878.dex.DexConstants.ACC_DIRECT_MASK;
 import static com.v7878.unsafe.AndroidUnsafe.ARRAY_INT_BASE_OFFSET;
 import static com.v7878.unsafe.AndroidUnsafe.IS64BIT;
 import static com.v7878.unsafe.AndroidUnsafe.allocateInstance;
@@ -8,13 +7,11 @@ import static com.v7878.unsafe.AndroidUnsafe.getIntN;
 import static com.v7878.unsafe.AndroidUnsafe.getIntO;
 import static com.v7878.unsafe.AndroidUnsafe.getLongO;
 import static com.v7878.unsafe.AndroidUnsafe.getObject;
-import static com.v7878.unsafe.AndroidUnsafe.getShortO;
 import static com.v7878.unsafe.AndroidUnsafe.putBooleanO;
 import static com.v7878.unsafe.AndroidUnsafe.putIntO;
 import static com.v7878.unsafe.AndroidUnsafe.putLongO;
 import static com.v7878.unsafe.AndroidUnsafe.putObject;
 import static com.v7878.unsafe.AndroidUnsafe.throwException;
-import static com.v7878.unsafe.ArtModifiers.kAccCopied;
 import static com.v7878.unsafe.ArtVersion.A10;
 import static com.v7878.unsafe.ArtVersion.A11;
 import static com.v7878.unsafe.ArtVersion.A12;
@@ -31,15 +28,12 @@ import static com.v7878.unsafe.ArtVersion.A8p1;
 import static com.v7878.unsafe.ArtVersion.A9;
 import static com.v7878.unsafe.ArtVersion.ART_INDEX;
 import static com.v7878.unsafe.Utils.nothrows_run;
-import static com.v7878.unsafe.Utils.searchConstructor;
-import static com.v7878.unsafe.Utils.searchField;
-import static com.v7878.unsafe.Utils.searchMethod;
 import static com.v7878.unsafe.Utils.unsupportedART;
 import static com.v7878.unsafe.access.AccessLinker.ExecutableAccessKind.VIRTUAL;
-import static com.v7878.unsafe.misc.Math.ulong;
 
 import com.v7878.r8.annotations.AlwaysInline;
 import com.v7878.r8.annotations.DoNotOptimize;
+import com.v7878.r8.annotations.DoNotShrink;
 import com.v7878.r8.annotations.DoNotShrinkType;
 import com.v7878.unsafe.access.AccessLinker;
 import com.v7878.unsafe.access.AccessLinker.ExecutableAccess;
@@ -53,9 +47,7 @@ import java.lang.reflect.Executable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.util.Arrays;
 import java.util.Objects;
-import java.util.function.IntPredicate;
 import java.util.stream.Stream;
 
 @ApiSensitive
@@ -106,87 +98,14 @@ public class Reflection {
         }
     }
 
-    @DangerLevel(DangerLevel.RAW_OFFSET)
     private static class Class_16p1_17p2 {
+        private static final long FIELDS_OFFSET = instanceFieldOffset(Class.class, "fields");
+
         @AlwaysInline
         public static long getFields(Class<?> clazz) {
             Objects.requireNonNull(clazz);
-            return getLongO(clazz, 40);
+            return getLongO(clazz, FIELDS_OFFSET);
         }
-
-        @AlwaysInline
-        public static long getMethods(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getLongO(clazz, 48);
-        }
-    }
-
-    @DangerLevel(DangerLevel.RAW_OFFSET)
-    private static class Class_16 {
-        @AlwaysInline
-        public static long getFields(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getLongO(clazz, 40);
-        }
-
-        @AlwaysInline
-        public static long getMethods(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getLongO(clazz, 48);
-        }
-
-        @AlwaysInline
-        public static int getCopiedMethodsOffset(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getShortO(clazz, 108) & 0xffff;
-        }
-
-        @AlwaysInline
-        public static int getVirtualMethodsOffset(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getShortO(clazz, 110) & 0xffff;
-        }
-    }
-
-    @DangerLevel(DangerLevel.RAW_OFFSET)
-    private static class Class_8_15 {
-        @AlwaysInline
-        public static long getInstanceFields(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getLongO(clazz, 40);
-        }
-
-        @AlwaysInline
-        public static long getStaticFields(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getLongO(clazz, 56);
-        }
-
-        @AlwaysInline
-        public static long getMethods(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getLongO(clazz, 48);
-        }
-
-        @AlwaysInline
-        public static int getCopiedMethodsOffset(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getShortO(clazz, 116) & 0xffff;
-        }
-
-        @AlwaysInline
-        public static int getVirtualMethodsOffset(Class<?> clazz) {
-            Objects.requireNonNull(clazz);
-            return getShortO(clazz, 118) & 0xffff;
-        }
-    }
-
-    @AlwaysInline
-    private static long getMethodsPtr(Class<?> clazz) {
-        return ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                Class_16p1_17p2.getMethods(clazz) :
-                Class_16.getMethods(clazz)) :
-                Class_8_15.getMethods(clazz);
     }
 
     @DangerLevel(DangerLevel.RAW_OFFSET)
@@ -201,12 +120,6 @@ public class Reflection {
         public static void setKind(MethodHandle mh, int kind) {
             Objects.requireNonNull(mh);
             putIntO(mh, 20, kind);
-        }
-
-        @AlwaysInline
-        public static void setInfo(MethodHandle mh, Object info) {
-            Objects.requireNonNull(mh);
-            putObject(mh, 32, info);
         }
     }
 
@@ -238,6 +151,9 @@ public class Reflection {
 
         ART_FIELD_SIZE = 16;
         ART_FIELD_PADDING = 4;
+
+        // From this point on, reflection is unconstrained
+        EarlyReflection.setTrusted(Reflection.class);
     }
 
     @AlwaysInline
@@ -248,10 +164,8 @@ public class Reflection {
     }
 
     @AlwaysInline
-    @DangerLevel(DangerLevel.RAW_OFFSET)
     public static long fieldOffset(Field f) {
-        Objects.requireNonNull(f);
-        return ulong(getIntO(f, 28));
+        return EarlyReflection.fieldOffset(f);
     }
 
     @AlwaysInline
@@ -305,257 +219,53 @@ public class Reflection {
         return toField(declaring_class, art_field);
     }
 
-    private static Field[] getFields0(Class<?> declaring_class, long fields, int begin,
-                                      int count, IntPredicate filter) {
-        Field[] out = new Field[count];
-        if (out.length == 0) {
-            return out;
-        }
-
-        int array_count = 0;
-        for (int i = 0; i < count; i++) {
-            int index = begin + i;
-            long art_field = fields + ART_FIELD_PADDING + ART_FIELD_SIZE * index;
-            if (getIntN(art_field) == 0) {
-                continue;
-            }
-            if (!filter.test(ArtFieldUtils.getFieldFlags(art_field))) {
-                continue;
-            }
-            Field tmp = toField(declaring_class, art_field);
-            setAccessible(tmp, true);
-            out[array_count++] = tmp;
-        }
-        return Arrays.copyOf(out, array_count);
+    public static Field[] getDeclaredInstanceFields(Class<?> clazz) {
+        return Stream.of(getDeclaredFields(clazz)).filter(
+                f -> !Modifier.isStatic(f.getModifiers())
+        ).toArray(Field[]::new);
     }
 
-    @SuppressWarnings("SameParameterValue")
-    @AlwaysInline
-    private static Field[] getFields0(Class<?> declaring_class, long fields, int begin, int count) {
-        return getFields0(declaring_class, fields, begin, count, unused -> true);
-    }
-
-    public static Field[] getHiddenInstanceFields(Class<?> clazz) {
-        if (ART_INDEX >= A16) {
-            long fields = ART_INDEX >= A16p1 ? Class_16p1_17p2.getFields(clazz) : Class_16.getFields(clazz);
-            if (fields == 0) {
-                return new Field[0];
-            }
-            int count = getIntN(fields);
-            return getFields0(clazz, fields, 0, count,
-                    flags -> !Modifier.isStatic(flags));
-        } else {
-            long fields = Class_8_15.getInstanceFields(clazz);
-            if (fields == 0) {
-                return new Field[0];
-            }
-            int count = getIntN(fields);
-            return getFields0(clazz, fields, 0, count);
+    public static Field getDeclaredInstanceField(Class<?> clazz, String name) {
+        var field = getDeclaredField(clazz, name);
+        if (Modifier.isStatic(field.getModifiers())) {
+            throw new IllegalStateException("Field " + field + " is not instance");
         }
-    }
-
-    public static Field getHiddenInstanceField(Class<?> clazz, String name) {
-        // TODO: use binary search as fields are in alphabetical order
-        return searchField(getHiddenInstanceFields(clazz), name);
+        return field;
     }
 
     public static long instanceFieldOffset(Class<?> clazz, String name) {
-        return fieldOffset(getHiddenInstanceField(clazz, name));
+        return fieldOffset(getDeclaredInstanceField(clazz, name));
     }
 
-    public static Field[] getHiddenStaticFields(Class<?> clazz) {
-        if (ART_INDEX >= A16) {
-            long fields = ART_INDEX >= A16p1 ? Class_16p1_17p2.getFields(clazz) : Class_16.getFields(clazz);
-            if (fields == 0) {
-                return new Field[0];
-            }
-            int count = getIntN(fields);
-            return getFields0(clazz, fields, 0, count, Modifier::isStatic);
-        } else {
-            long fields = Class_8_15.getStaticFields(clazz);
-            if (fields == 0) {
-                return new Field[0];
-            }
-            int count = getIntN(fields);
-            return getFields0(clazz, fields, 0, count);
+    public static Field[] getDeclaredStaticFields(Class<?> clazz) {
+        return Stream.of(getDeclaredFields(clazz)).filter(
+                f -> Modifier.isStatic(f.getModifiers())
+        ).toArray(Field[]::new);
+    }
+
+    public static Field getDeclaredStaticField(Class<?> clazz, String name) {
+        var field = getDeclaredField(clazz, name);
+        if (!Modifier.isStatic(field.getModifiers())) {
+            throw new IllegalStateException("Field " + field + " is not static");
         }
-    }
-
-    public static Field getHiddenStaticField(Class<?> clazz, String name) {
-        // TODO: use binary search as fields are in alphabetical order
-        return searchField(getHiddenStaticFields(clazz), name);
+        return field;
     }
 
     public static long staticFieldOffset(Class<?> clazz, String name) {
-        return fieldOffset(getHiddenStaticField(clazz, name));
-    }
-
-    public static Field[] getHiddenFields(Class<?> clazz) {
-        if (ART_INDEX >= A16) {
-            long fields = ART_INDEX >= A16p1 ? Class_16p1_17p2.getFields(clazz) : Class_16.getFields(clazz);
-            if (fields == 0) {
-                return new Field[0];
-            }
-            int count = getIntN(fields);
-            return getFields0(clazz, fields, 0, count);
-        } else {
-            Field[] out1 = getHiddenInstanceFields(clazz);
-            Field[] out2 = getHiddenStaticFields(clazz);
-            Field[] out = new Field[out1.length + out2.length];
-            System.arraycopy(out1, 0, out, 0, out1.length);
-            System.arraycopy(out2, 0, out, out1.length, out2.length);
-            return out;
-        }
-    }
-
-    public static Field getHiddenField(Class<?> clazz, String name) {
-        // TODO?: use binary search as fields are in alphabetical order
-        return searchField(getHiddenFields(clazz), name);
+        return fieldOffset(getDeclaredStaticField(clazz, name));
     }
 
     public static long fieldOffset(Class<?> clazz, String name) {
-        return fieldOffset(getHiddenField(clazz, name));
+        return fieldOffset(getDeclaredField(clazz, name));
     }
 
-    // The order is same as in the dex file. There is no such thing for fields
-    public static long[] getArtMethods(Class<?> clazz) {
-        long methods = getMethodsPtr(clazz);
-        if (methods == 0) {
-            return new long[0];
-        }
-        int count = ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                getIntN(methods) :
-                Class_16.getCopiedMethodsOffset(clazz)) :
-                Class_8_15.getCopiedMethodsOffset(clazz);
-        var out = new long[count];
-        int array_count = 0;
-        for (int i = 0; i < count; i++) {
-            long art_method = methods + ART_METHOD_PADDING + ART_METHOD_SIZE * i;
-            if ((ArtMethodUtils.getExecutableFlags(art_method) & kAccCopied) != 0) {
-                continue;
-            }
-            out[array_count++] = art_method;
-        }
-        return Arrays.copyOf(out, array_count);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T extends Executable> T[] fillExecutables(
-            T[] out, long methods, int begin, IntPredicate filter) {
-        if (out.length == 0) {
-            return out;
-        }
-
-        MethodHandle impl = allocateInstance(Holder.MH_IMPL);
-        _MethodHandle.setKind(impl, 0);
-
-        int array_count = 0;
-        for (int i = 0; i < out.length; i++) {
-            int index = begin + i;
-            long art_method = methods + ART_METHOD_PADDING + ART_METHOD_SIZE * index;
-            if (!filter.test(ArtMethodUtils.getExecutableFlags(art_method))) {
-                continue;
-            }
-            _MethodHandle.setArt(impl, art_method);
-            _MethodHandle.setInfo(impl, null);
-            Executable tmp = MethodHandles.reflectAs(Executable.class, impl);
-            setAccessible(tmp, true);
-            out[array_count++] = (T) tmp;
-        }
-        return Arrays.copyOf(out, array_count);
-    }
-
-    private static <T extends Executable> T[] fillExecutables(
-            T[] out, long methods, int begin) {
-        return fillExecutables(out, methods, begin, unused -> true);
-    }
-
-    public static Executable[] getHiddenExecutables(Class<?> clazz) {
-        long methods = getMethodsPtr(clazz);
-        if (methods == 0) {
-            return new Executable[0];
-        }
-        int count = ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                getIntN(methods) :
-                Class_16.getCopiedMethodsOffset(clazz)) :
-                Class_8_15.getCopiedMethodsOffset(clazz);
-        var out = new Executable[count];
-        if (ART_INDEX >= A16p1) {
-            return fillExecutables(out, methods, 0, flags -> (flags & kAccCopied) == 0);
-        }
-        return fillExecutables(out, methods, 0);
-    }
-
-    public static Executable[] getHiddenDirectExecutables(Class<?> clazz) {
-        long methods = getMethodsPtr(clazz);
-        if (methods == 0) {
-            return new Executable[0];
-        }
-        int count = ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                getIntN(methods) :
-                Class_16.getVirtualMethodsOffset(clazz)) :
-                Class_8_15.getVirtualMethodsOffset(clazz);
-        var out = new Executable[count];
-        if (ART_INDEX >= A16p1) {
-            return fillExecutables(out, methods, 0, flags -> {
-                if ((flags & kAccCopied) != 0) {
-                    return false;
-                }
-                return (flags & ACC_DIRECT_MASK) != 0;
-            });
-        }
-        return fillExecutables(out, methods, 0);
-    }
-
-    // Note: only methods can be virtual
-    public static Method[] getHiddenVirtualMethods(Class<?> clazz) {
-        long methods = getMethodsPtr(clazz);
-        if (methods == 0) {
-            return new Method[0];
-        }
-        int begin = ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ? 0 :
-                Class_16.getVirtualMethodsOffset(clazz)) :
-                Class_8_15.getVirtualMethodsOffset(clazz);
-        int end = ART_INDEX >= A16 ? (ART_INDEX >= A16p1 ?
-                getIntN(methods) :
-                Class_16.getCopiedMethodsOffset(clazz)) :
-                Class_8_15.getCopiedMethodsOffset(clazz);
-        var out = new Method[end - begin];
-        if (ART_INDEX >= A16p1) {
-            return fillExecutables(out, methods, begin, flags -> {
-                if ((flags & kAccCopied) != 0) {
-                    return false;
-                }
-                return (flags & ACC_DIRECT_MASK) == 0;
-            });
-        }
-        return fillExecutables(out, methods, begin);
-    }
-
-    public static Method getHiddenVirtualMethod(Class<?> clazz, String name, Class<?>... params) {
-        return searchMethod(getHiddenVirtualMethods(clazz), name, params);
-    }
-
-    public static Method[] getHiddenMethods(Class<?> clazz) {
-        return Arrays.stream(getHiddenExecutables(clazz))
-                .filter((exec) -> exec instanceof Method)
-                .toArray(Method[]::new);
-    }
-
-    public static Method getHiddenMethod(Class<?> clazz, String name, Class<?>... params) {
-        return searchMethod(getHiddenMethods(clazz), name, params);
-    }
-
-    @SuppressWarnings({"unchecked", "SuspiciousToArrayCall"})
-    public static <T> Constructor<T>[] getHiddenConstructors(Class<T> clazz) {
-        return Arrays.stream(getHiddenDirectExecutables(clazz))
-                .filter((exec) -> exec instanceof Constructor
-                        && !Modifier.isStatic(exec.getModifiers()))
-                .toArray(Constructor[]::new);
-    }
-
-    public static <T> Constructor<T> getHiddenConstructor(Class<T> clazz, Class<?>... params) {
-        return searchConstructor(getHiddenConstructors(clazz), params);
+    public static Executable[] getDeclaredExecutables(Class<?> clazz) {
+        var methods = getDeclaredMethods(clazz);
+        var constructors = getDeclaredConstructors(clazz);
+        var executables = new Executable[methods.length + constructors.length];
+        System.arraycopy(methods, 0, executables, 0, methods.length);
+        System.arraycopy(constructors, 0, executables, methods.length, constructors.length);
+        return executables;
     }
 
     @DangerLevel(DangerLevel.RAW_OFFSET)
@@ -580,24 +290,16 @@ public class Reflection {
         return method;
     }
 
-    @DangerLevel(DangerLevel.VERY_CAREFUL)
-    public static Method getStaticConstructor(Class<?> clazz) {
-        var value = Arrays.stream(getHiddenDirectExecutables(clazz))
-                .filter((exec) -> exec instanceof Constructor
-                        && Modifier.isStatic(exec.getModifiers()))
-                .findAny().orElse(null);
-        if (value == null) {
-            return null;
-        }
-        return constructorToMethod((Constructor<?>) value);
-    }
+    // TODO? public static Method getStaticConstructor(Class<?> clazz);
 
+    @DoNotShrink // TODO: DoNotInline
     public static Method[] getDeclaredMethods(Class<?> clazz) {
         var out = clazz.getDeclaredMethods();
         Stream.of(out).forEach(value -> setAccessible(value, true));
         return out;
     }
 
+    @DoNotShrink // TODO: DoNotInline
     public static Method getDeclaredMethod(Class<?> clazz, String name, Class<?>... params) {
         try {
             var out = clazz.getDeclaredMethod(name, params);
@@ -608,12 +310,15 @@ public class Reflection {
         }
     }
 
-    public static Constructor<?>[] getDeclaredConstructors(Class<?> clazz) {
+    @DoNotShrink // TODO: DoNotInline
+    @SuppressWarnings("unchecked")
+    public static <T> Constructor<T>[] getDeclaredConstructors(Class<T> clazz) {
         var out = clazz.getDeclaredConstructors();
         Stream.of(out).forEach(value -> setAccessible(value, true));
-        return out;
+        return (Constructor<T>[]) out;
     }
 
+    @DoNotShrink // TODO: DoNotInline
     public static <T> Constructor<T> getDeclaredConstructor(Class<T> clazz, Class<?>... params) {
         try {
             var out = clazz.getDeclaredConstructor(params);
@@ -624,12 +329,14 @@ public class Reflection {
         }
     }
 
+    @DoNotShrink // TODO: DoNotInline
     public static Field[] getDeclaredFields(Class<?> clazz) {
         var out = clazz.getDeclaredFields();
         Stream.of(out).forEach(value -> setAccessible(value, true));
         return out;
     }
 
+    @DoNotShrink // TODO: DoNotInline
     public static Field getDeclaredField(Class<?> clazz, String name) {
         try {
             var out = clazz.getDeclaredField(name);
@@ -649,7 +356,6 @@ public class Reflection {
         }
     }
 
-    @AlwaysInline
     public static MethodHandle unreflect(Executable ex) {
         setAccessible(ex, true);
         MethodHandle handle;

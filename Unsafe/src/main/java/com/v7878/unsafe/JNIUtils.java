@@ -11,14 +11,13 @@ import static com.v7878.unsafe.InstructionSet.ARM;
 import static com.v7878.unsafe.InstructionSet.ARM64;
 import static com.v7878.unsafe.InstructionSet.X86;
 import static com.v7878.unsafe.InstructionSet.X86_64;
-import static com.v7878.unsafe.Reflection.getHiddenMethod;
+import static com.v7878.unsafe.Reflection.getDeclaredMethod;
 import static com.v7878.unsafe.Utils.check;
 import static com.v7878.unsafe.foreign.BulkLinker.CallType.CRITICAL;
 import static com.v7878.unsafe.foreign.BulkLinker.CallType.FAST_STATIC;
 import static com.v7878.unsafe.foreign.BulkLinker.CallType.FAST_VIRTUAL_REPLACE_THIS;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.BOOL;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.INT;
-import static com.v7878.unsafe.foreign.BulkLinker.MapType.LOAD_JOBJECT;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.LONG;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.LONG_AS_WORD;
 import static com.v7878.unsafe.foreign.BulkLinker.MapType.OBJECT;
@@ -493,9 +492,10 @@ public class JNIUtils {
         @CallSignature(type = CRITICAL, ret = VOID, args = {LONG_AS_WORD, LONG_AS_WORD})
         abstract void DeleteGlobalRef(long env, long ref);
 
-        @LibrarySymbol(name = "_ZN3art9JNIEnvExt11NewLocalRefEPNS_6mirror6ObjectE")
-        @CallSignature(type = CRITICAL, ret = LONG_AS_WORD, args = {LONG_AS_WORD, LOAD_JOBJECT})
-        abstract long NewLocalRef(long env, Object obj);
+        // TODO
+        // @LibrarySymbol(name = "_ZN3art9JNIEnvExt11NewLocalRefEPNS_6mirror6ObjectE")
+        // @CallSignature(type = CRITICAL, ret = LONG_AS_WORD, args = {LONG_AS_WORD, LOAD_JOBJECT})
+        // abstract long NewLocalRef(long env, Object obj);
 
         @LibrarySymbol(name = "_ZN3art9JNIEnvExt14DeleteLocalRefEP8_jobject")
         @CallSignature(type = CRITICAL, ret = VOID, args = {LONG_AS_WORD, LONG_AS_WORD})
@@ -510,7 +510,7 @@ public class JNIUtils {
         @DoNotObfuscate
         @SuppressWarnings("unused")
         private static MemorySegment genPutRef() {
-            Method method = getHiddenMethod(SunUnsafe.getUnsafeClass(), "putObject",
+            Method method = getDeclaredMethod(SunUnsafe.getUnsafeClass(), "putObject",
                     Object.class, long.class, Object.class);
             assert Modifier.isNative(method.getModifiers());
             return MemorySegment.ofAddress(getExecutableData(method));
@@ -551,10 +551,11 @@ public class JNIUtils {
                 Native.class, ART.or(getJNINativeInterfaceLookup()));
     }
 
-    public static long NewLocalRef(Object obj) {
-        long env = getCurrentEnvPtr();
-        return Native.INSTANCE.NewLocalRef(env, obj);
-    }
+    // TODO
+    // public static long NewLocalRef(Object obj) {
+    //     long env = getCurrentEnvPtr();
+    //     return Native.INSTANCE.NewLocalRef(env, obj);
+    // }
 
     public static void DeleteLocalRef(long ref) {
         long env = getCurrentEnvPtr();
@@ -603,7 +604,9 @@ public class JNIUtils {
         return (Method) Native.INSTANCE.ToReflectedMethod(mid, /*unused*/ false);
     }
 
-    //TODO: public static long ToArtMethod(long mid)
+    public static long ToArtMethod(long mid) {
+        return Reflection.getArtMethod(ToReflectedMethod(mid));
+    }
 
     public static long FromReflectedField(Field field) {
         return Native.INSTANCE.FromReflectedField(field);
@@ -613,5 +616,7 @@ public class JNIUtils {
         return (Field) Native.INSTANCE.ToReflectedField(fid, /*unused*/ false);
     }
 
-    //TODO: public static long ToArtField(long mid)
+    public static long ToArtField(long mid) {
+        return Reflection.getArtField(ToReflectedField(mid));
+    }
 }

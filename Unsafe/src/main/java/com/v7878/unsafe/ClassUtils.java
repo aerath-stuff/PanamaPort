@@ -24,8 +24,7 @@ import static com.v7878.unsafe.ArtVersion.A8p0;
 import static com.v7878.unsafe.ArtVersion.A8p1;
 import static com.v7878.unsafe.ArtVersion.A9;
 import static com.v7878.unsafe.ArtVersion.ART_INDEX;
-import static com.v7878.unsafe.Reflection.getHiddenExecutables;
-import static com.v7878.unsafe.Reflection.getHiddenFields;
+import static com.v7878.unsafe.Reflection.getDeclaredExecutables;
 import static com.v7878.unsafe.Utils.nothrows_run;
 import static com.v7878.unsafe.Utils.shouldNotReachHere;
 import static com.v7878.unsafe.Utils.unsupportedART;
@@ -265,7 +264,7 @@ public class ClassUtils {
         if (getClassStatus(clazz).ordinal() < ClassStatus.Verified.ordinal()) {
             setClassStatus(clazz, ClassStatus.Verified);
 
-            for (var method : Reflection.getArtMethods(clazz)) {
+            for (var method : Reflection.getDeclaredMethods(clazz)) {
                 ArtMethodUtils.changeExecutableFlags(method, flags -> {
                     if ((flags & ACC_NATIVE) == 0) {
                         return flags | kAccSkipAccessChecks;
@@ -323,7 +322,7 @@ public class ClassUtils {
     public static void openClass(Class<?> clazz, boolean unfinal_fields) {
         makeClassInheritable(clazz);
 
-        var executables = getHiddenExecutables(clazz);
+        var executables = getDeclaredExecutables(clazz);
         for (var executable : executables) {
             int flags = executable.getModifiers();
             if (executable instanceof Constructor<?> || Modifier.isStatic(flags)) {
@@ -337,7 +336,7 @@ public class ClassUtils {
             makeExecutablePublicApi(executable);
         }
 
-        var fields = getHiddenFields(clazz);
+        var fields = Reflection.getDeclaredFields(clazz);
         for (var field : fields) {
             makeFieldPublic(field);
             makeFieldPublicApi(field);

@@ -317,7 +317,7 @@ public class AccessLinker {
         var target_class = cached_classes.computeIfAbsent(annotation.klass(),
                 name -> ClassUtils.forName(name, loader));
         var target = searchField(cached_fields.computeIfAbsent(
-                target_class, Reflection::getHiddenFields), annotation.name());
+                target_class, Reflection::getDeclaredFields), annotation.name());
         makeFieldPublic(target);
         makeClassPublic(target.getDeclaringClass());
         if (kind == INSTANCE_SETTER || kind == STATIC_SETTER) {
@@ -398,7 +398,7 @@ public class AccessLinker {
         Class<?> target_class = cached_classes.computeIfAbsent(annotation.klass(),
                 name -> ClassUtils.forName(name, loader));
         var target = searchExecutable(cached_executables.computeIfAbsent(target_class,
-                Reflection::getHiddenExecutables), annotation.name(), annotation.args());
+                Reflection::getDeclaredExecutables), annotation.name(), annotation.args());
         if (kind != DIRECT_HOOK_VTABLE && kind != DIRECT_AS_SUPER) {
             makeClassPublic(target.getDeclaringClass());
             makeExecutablePublic(target);

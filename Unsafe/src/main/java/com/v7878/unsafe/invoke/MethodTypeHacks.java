@@ -11,7 +11,7 @@ import static com.v7878.dex.immutable.TypeId.V;
 import static com.v7878.unsafe.AndroidUnsafe.allocateInstance;
 import static com.v7878.unsafe.DexFileUtils.loadClass;
 import static com.v7878.unsafe.DexFileUtils.openDexFile;
-import static com.v7878.unsafe.Reflection.getHiddenInstanceFields;
+import static com.v7878.unsafe.Reflection.getDeclaredInstanceFields;
 import static com.v7878.unsafe.Utils.DEBUG_BUILD;
 import static com.v7878.unsafe.invoke.EmulatedStackFrame.getSize;
 
@@ -94,7 +94,7 @@ public class MethodTypeHacks {
                             ib.iop(PUT_OBJECT, ib.p(1), ib.this_(), po_field);
                             ib.iop(PUT_OBJECT, ib.p(2), ib.this_(), ro_field);
                             ib.iop(PUT_OBJECT, ib.p(3), ib.this_(), rs_field);
-                            for (var field : getHiddenInstanceFields(INVOKE_FORM)) {
+                            for (var field : getDeclaredInstanceFields(INVOKE_FORM)) {
                                 ArtFieldUtils.makeFieldPublic(field);
                                 ArtFieldUtils.makeFieldNonFinal(field);
 
